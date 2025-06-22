@@ -1,42 +1,114 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+/* App.css */
+
+/* Popup container */
+.popup-container {
+  width: 280px;
+  min-height: 200px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+}
+
+/* Header */
+.popup-header {
+  background: linear-gradient(135deg, #ff0050, #ff4081);
+  color: white;
+  padding: 16px 20px;
   text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.popup-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* Content area */
+.popup-content {
+  padding: 24px 20px;
+  text-align: center;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.status-text {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 20px 0;
+  color: #333;
 }
 
-.card {
-  padding: 2em;
+.action-text {
+  font-size: 14px;
+  color: #666;
+  margin: 16px 0 0 0;
 }
 
-.read-the-docs {
-  color: #888;
+/* Switch container */
+.switch-container {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+/* Switch styling */
+.switch {
+  position: relative;
+  width: 60px;
+  height: 32px;
+  cursor: pointer;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  border-radius: 32px;
+  transition: all 0.3s ease;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 24px;
+  width: 24px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Active state */
+input:checked + .slider {
+  background: linear-gradient(135deg, #ff0050, #ff4081);
+}
+
+input:checked + .slider:before {
+  transform: translateX(28px);
+}
+
+/* Hover effects */
+.slider:hover {
+  box-shadow: 0 0 8px rgba(255, 0, 80, 0.3);
+}
+
+input:checked + .slider:hover {
+  box-shadow: 0 0 8px rgba(255, 0, 80, 0.5);
+}
+
+/* Focus state for accessibility */
+.switch input:focus + .slider {
+  outline: 2px solid #ff4081;
+  outline-offset: 2px;
 }
