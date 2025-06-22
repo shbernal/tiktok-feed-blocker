@@ -1,13 +1,17 @@
 // content.js - TikTok Feed Blocker
 
-// Configuration - targeting the main explore page content
+// Configuration - targeting the main explore page content + progress indicator
 const SELECTORS = {
   // Main content container for the explore page
   mainContent: '#main-content-explore_page',
+  // Progress indicator that shows loading
+  progressIndicator: '.progress-js-inner',
   // Alternative selectors in case the structure changes
   exploreLayout: '[class*="DivShareLayoutBase-StyledShareLayoutV2-ExploreLayout"]',
   // Broader selector for any main content containers
-  mainContentGeneric: '[id*="main-content"]'
+  mainContentGeneric: '[id*="main-content"]',
+  // Any progress-related elements
+  progressElements: '[class*="progress"]'
 };
 
 // Main blocking function
@@ -19,6 +23,21 @@ function blockFeedElements() {
     console.log('TikTok explore page blocked');
     return; // Exit early if we found and blocked the main container
   }
+
+  // Block progress indicator
+  const progressIndicator = document.querySelector(SELECTORS.progressIndicator);
+  if (progressIndicator && progressIndicator.style.display !== 'none') {
+    progressIndicator.style.display = 'none';
+    console.log('TikTok progress indicator blocked');
+  }
+
+  // Block any progress-related elements (broader catch)
+  const progressElements = document.querySelectorAll(SELECTORS.progressElements);
+  progressElements.forEach(element => {
+    if (element && element.style.display !== 'none') {
+      element.style.display = 'none';
+    }
+  });
 
   // Fallback: target by class pattern
   const exploreLayouts = document.querySelectorAll(SELECTORS.exploreLayout);
