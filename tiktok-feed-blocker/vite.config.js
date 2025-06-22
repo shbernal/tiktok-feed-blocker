@@ -1,8 +1,19 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { crx } from '@crxjs/vite-plugin'
-import manifest from './public/manifest.json'
+import { resolve } from 'path'
 
 export default defineConfig({
-  plugins: [react(), crx({ manifest })],
+  plugins: [react()],
+  build: {
+    outDir: 'dist',
+    rollupOptions: {
+      input: {
+        popup: resolve(__dirname, 'index.html'),
+        content: resolve(__dirname, 'src/content.js')
+      },
+      output: {
+        entryFileNames: '[name].js',
+      }
+    }
+  }
 })

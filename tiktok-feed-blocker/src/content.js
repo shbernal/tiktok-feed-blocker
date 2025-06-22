@@ -85,7 +85,7 @@ function setupObserver() {
 
 // Initialize the blocker
 function init() {
-  console.log('TikTok Feed Blocker initialized');
+  console.log('TikTok Feed Blocker initialized V1');
   
   // Block existing elements immediately
   blockFeedElements();
