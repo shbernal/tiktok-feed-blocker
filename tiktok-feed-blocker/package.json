@@ -4,14 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently \"vite build --watch\" \"web-ext-reload\"",
     "build": "vite build",
     "watch": "vite build --watch",
-    "ext:dev": "web-ext run --source-dir=dist --start-url about:debugging",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "concurrently": "^9.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
