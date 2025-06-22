@@ -11,7 +11,7 @@ function App() {
   return (
     <div className="popup-container">
       <div className="popup-header">
-        <h2>TikTok Feed Blocker</h2>
+        <h2>TikTok Feed Blocker check</h2>
       </div>
       
       <div className="popup-content">

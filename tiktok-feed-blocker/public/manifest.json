@@ -9,9 +9,15 @@
       "run_at": "document_end"
     }
   ],
+
   "permissions": [
-    "activeTab", "storage"
+    "activeTab", "storage", "tabs"
   ],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+  
   "action": {
     "default_popup": "index.html"
   }
