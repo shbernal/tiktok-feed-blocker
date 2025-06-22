@@ -4,7 +4,7 @@
   "version": "1.0",
   "content_scripts": [
     {
-      "matches": ["*://*.tiktok.com/*"],
+      "matches": ["*://*.tiktok.com/explore*"],
       "js": ["public/content.js"],
       "run_at": "document_end"
     }
