@@ -5,7 +5,7 @@
   "description": "Blocks TikTok explore feed content and mutes audio",
 
     "permissions": [
-    "activeTab"
+    "activeTab", "storage"
   ],
 
    "host_permissions": [

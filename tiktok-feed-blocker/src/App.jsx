@@ -1,11 +1,32 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 
 function App() {
   const [active, setActive] = useState(true);
 
-  const toggleActive = () => {
-    setActive(!active);
+  useEffect(() => {
+    chrome.storage.local.get(['extensionActive'], (result) => {
+      setActive(result.extensionActive !== false);
+    });
+  }, []);
+
+
+  const toggleActive = async () => {
+    const newActive = !active;
+    setActive(newActive);
+  
+
+    chrome.storage.local.set({ extensionActive: newActive });
+
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        chrome.tabs.sendMessage(tab.id, { 
+          action: 'toggleExtension', 
+          active: newActive 
+        });
+      } catch (error) {
+        console.log('Could not send message to content script:', error);
+      }
   };
 
   return (
