@@ -3,5 +3,5 @@
 [![Users](https://img.shields.io/chrome-web-store/users/hjagmapcdgdffjbbedipfoocmkmhbjeh?label=Users)](https://chromewebstore.google.com/detail/tiktok-feed-blocker/hjagmapcdgdffjbbedipfoocmkmhbjeh)
 [![Rating](https://img.shields.io/chrome-web-store/rating/hjagmapcdgdffjbbedipfoocmkmhbjeh?label=Rating)](https://chromewebstore.google.com/detail/tiktok-feed-blocker/hjagmapcdgdffjbbedipfoocmkmhbjeh)
 [![Rating Count](https://img.shields.io/chrome-web-store/rating-count/hjagmapcdgdffjbbedipfoocmkmhbjeh?label=Rating%20Count)](https://chromewebstore.google.com/detail/tiktok-feed-blocker/hjagmapcdgdffjbbedipfoocmkmhbjeh)
-- Small Chrome extension to blocks TikTok Explore and Feed pages and mute audio.
+- Small Chrome extension to block TikTok Explore and Feed pages and mute audio.
 - Check it out on [Chrome Web Store](https://chromewebstore.google.com/detail/tiktok-feed-blocker/hjagmapcdgdffjbbedipfoocmkmhbjeh)
