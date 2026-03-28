@@ -5,7 +5,7 @@ export default defineManifest({
   manifest_version: 3,
   name: 'TikTok Feed Blocker',
   version: pkg.version,
-  description: 'Blocks TikTok explore feed content and mutes audio',
+  description: 'Blocks TikTok Home, Explore, and Live pages and mutes audio',
   permissions: ['activeTab', 'storage'],
   host_permissions: ['*://*.tiktok.com/*'],
   background: {

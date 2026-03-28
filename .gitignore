@@ -3,5 +3,3 @@ dist
 release
 .env*
 AGENTS.md
-.github/
-scripts/publish-cws.sh
