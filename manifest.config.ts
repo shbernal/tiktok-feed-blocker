@@ -8,6 +8,19 @@ export default defineManifest({
   description: 'Blocks TikTok explore feed content and mutes audio',
   permissions: ['activeTab', 'storage'],
   host_permissions: ['*://*.tiktok.com/*'],
+  background: {
+    service_worker: 'src/background/main.ts',
+    type: 'module',
+  },
+  commands: {
+    'toggle-current-page-block': {
+      suggested_key: {
+        default: 'Ctrl+Shift+8',
+        mac: 'Command+Shift+8',
+      },
+      description: 'Toggle blocking for the current TikTok page',
+    },
+  },
   content_scripts: [
     {
       matches: ['*://*.tiktok.com/*'],

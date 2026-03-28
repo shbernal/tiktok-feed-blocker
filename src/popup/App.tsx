@@ -3,7 +3,11 @@ import './App.css'
 import {
   DEFAULT_SETTINGS,
   deriveSettingsFromStorage,
+  isAllPagesActive,
   LEGACY_ACTIVE_STORAGE_KEY,
+  type PageSection,
+  setAllPages,
+  syncActiveWithPages,
   type ExtensionSettings,
   SETTINGS_STORAGE_KEY,
 } from '../shared/settings'
@@ -17,26 +21,55 @@ function App() {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS)
 
   useEffect(() => {
-    chrome.storage.local.get([SETTINGS_STORAGE_KEY, LEGACY_ACTIVE_STORAGE_KEY], (result) => {
-      const initialSettings = deriveSettingsFromStorage(
-        result[SETTINGS_STORAGE_KEY],
-        result[LEGACY_ACTIVE_STORAGE_KEY],
+    chrome.storage.local.get(
+      [SETTINGS_STORAGE_KEY, LEGACY_ACTIVE_STORAGE_KEY],
+      result => {
+        const initialSettings = deriveSettingsFromStorage(
+          result[SETTINGS_STORAGE_KEY],
+          result[LEGACY_ACTIVE_STORAGE_KEY],
+        )
+        setSettings(initialSettings)
+        chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: initialSettings })
+      },
+    )
+
+    const handleStorageChange: Parameters<
+      typeof chrome.storage.onChanged.addListener
+    >[0] = (changes, areaName) => {
+      if (areaName !== 'local' || !changes[SETTINGS_STORAGE_KEY]) {
+        return
+      }
+
+      setSettings(currentSettings =>
+        deriveSettingsFromStorage(
+          changes[SETTINGS_STORAGE_KEY].newValue,
+          currentSettings.active,
+        ),
       )
-      setSettings(initialSettings)
-      chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: initialSettings })
-    })
+    }
+
+    chrome.storage.onChanged.addListener(handleStorageChange)
+
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange)
+    }
   }, [])
 
   const persistAndNotify = async (nextSettings: ExtensionSettings) => {
-    setSettings(nextSettings)
-    chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: nextSettings })
+    const syncedSettings = syncActiveWithPages(nextSettings)
+
+    setSettings(syncedSettings)
+    chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: syncedSettings })
 
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      })
       if (tab?.id !== undefined) {
         const message: UpdateSettingsMessage = {
           action: 'updateSettings',
-          settings: nextSettings,
+          settings: syncedSettings,
         }
         chrome.tabs.sendMessage(tab.id, message, () => {
           // Ignore expected errors (e.g., active tab has no injected content script).
@@ -48,18 +81,17 @@ function App() {
     }
   }
 
-  const toggleActive = () => {
-    void persistAndNotify({
-      ...settings,
-      active: !settings.active,
-    })
+  const toggleAllPages = () => {
+    void persistAndNotify(setAllPages(settings, !isAllPagesActive(settings)))
   }
 
-  const toggleSection = (section: 'home' | 'explore' | 'live') => {
-    void persistAndNotify({
-      ...settings,
-      [section]: !settings[section],
-    })
+  const toggleSection = (section: PageSection) => {
+    void persistAndNotify(
+      syncActiveWithPages({
+        ...settings,
+        [section]: !settings[section],
+      }),
+    )
   }
 
   return (
@@ -72,50 +104,49 @@ function App() {
         <div className="switch-list">
           <div className="switch-row">
             <span className="switch-label switch-label-master">
-              <span className="switch-label-master-all">All</span> pages
+              Block all pages
             </span>
             <label className="switch">
-              <input type="checkbox" checked={settings.active} onChange={toggleActive} />
+              <input
+                type="checkbox"
+                checked={isAllPagesActive(settings)}
+                onChange={toggleAllPages}
+              />
               <span className="slider"></span>
             </label>
           </div>
 
           <div className="switch-row switch-row-child">
-            <span className={`switch-label${settings.active ? '' : ' switch-label-disabled'}`}>Home</span>
+            <span className="switch-label">Block Home</span>
             <label className="switch switch-small">
               <input
                 type="checkbox"
                 checked={settings.home}
                 onChange={() => toggleSection('home')}
-                disabled={!settings.active}
               />
               <span className="slider"></span>
             </label>
           </div>
 
           <div className="switch-row switch-row-child">
-            <span className={`switch-label${settings.active ? '' : ' switch-label-disabled'}`}>
-              Explore
-            </span>
+            <span className="switch-label">Block Explore</span>
             <label className="switch switch-small">
               <input
                 type="checkbox"
                 checked={settings.explore}
                 onChange={() => toggleSection('explore')}
-                disabled={!settings.active}
               />
               <span className="slider"></span>
             </label>
           </div>
 
           <div className="switch-row switch-row-child">
-            <span className={`switch-label${settings.active ? '' : ' switch-label-disabled'}`}>Live</span>
+            <span className="switch-label">Block Live</span>
             <label className="switch switch-small">
               <input
                 type="checkbox"
                 checked={settings.live}
                 onChange={() => toggleSection('live')}
-                disabled={!settings.active}
               />
               <span className="slider"></span>
             </label>

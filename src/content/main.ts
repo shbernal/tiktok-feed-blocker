@@ -1,23 +1,31 @@
 import {
   deriveSettingsFromStorage,
+  type PageSection,
+  isAnyPageActive,
   LEGACY_ACTIVE_STORAGE_KEY,
   normalizeSettings,
   SETTINGS_STORAGE_KEY,
+  syncActiveWithPages,
   type ExtensionSettings,
 } from '../shared/settings'
 
 const OVERLAY_ID = 'ttfb-feed-overlay'
 const OVERLAY_STYLE_ID = 'ttfb-feed-overlay-style'
 const OVERLAY_TOGGLE_ID = 'ttfb-active-toggle'
+const OVERLAY_TOGGLE_LABEL_ID = 'ttfb-active-toggle-label'
 const HIDDEN_HOME_ATTR = 'data-ttfb-home-hidden'
 const HIDDEN_EXPLORE_ATTR = 'data-ttfb-explore-hidden'
 const HIDDEN_LIVE_ATTR = 'data-ttfb-live-hidden'
+const MEDIA_PREVIOUS_MUTED_ATTR = 'data-ttfb-previous-muted'
+const MEDIA_PREVIOUS_VOLUME_ATTR = 'data-ttfb-previous-volume'
+const MEDIA_PREVIOUS_PAUSED_ATTR = 'data-ttfb-previous-paused'
 
 const SELECTORS = {
   mainContent: '#main-content-explore_page',
   progressIndicator: '.progress-js-inner',
   columnListContainer: '#column-list-container',
-  exploreLayout: '[class*="DivShareLayoutBase-StyledShareLayoutV2-ExploreLayout"]',
+  exploreLayout:
+    '[class*="DivShareLayoutBase-StyledShareLayoutV2-ExploreLayout"]',
   feedNavigationContainer: '[class*="DivFeedNavigationContainer"]',
   progressElements: '[class*="progress"]',
   livePageMainContainer: 'div[class*="ejpasz60"]',
@@ -26,6 +34,10 @@ const SELECTORS = {
 type UpdateSettingsMessage = {
   action: 'updateSettings'
   settings: ExtensionSettings
+}
+
+type ToggleCurrentPageBlockMessage = {
+  action: 'toggleCurrentPageBlock'
 }
 
 let settings: ExtensionSettings = {
@@ -37,13 +49,26 @@ let settings: ExtensionSettings = {
 let observer: MutationObserver | null = null
 let intervalId: number | null = null
 
-const isUpdateSettingsMessage = (message: unknown): message is UpdateSettingsMessage => {
+const isUpdateSettingsMessage = (
+  message: unknown,
+): message is UpdateSettingsMessage => {
   return (
     typeof message === 'object' &&
     message !== null &&
     'action' in message &&
     'settings' in message &&
     (message as { action: unknown }).action === 'updateSettings'
+  )
+}
+
+const isToggleCurrentPageBlockMessage = (
+  message: unknown,
+): message is ToggleCurrentPageBlockMessage => {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    'action' in message &&
+    (message as { action: unknown }).action === 'toggleCurrentPageBlock'
   )
 }
 
@@ -61,26 +86,74 @@ const hideElement = (element: HTMLElement, hiddenAttr: string) => {
 }
 
 const hideElements = (selector: string, hiddenAttr: string) => {
-  document.querySelectorAll<HTMLElement>(selector).forEach((element) => {
+  document.querySelectorAll<HTMLElement>(selector).forEach(element => {
     hideElement(element, hiddenAttr)
   })
 }
 
-const showElements = (selector: string, hiddenAttr: string) => {
-  document.querySelectorAll<HTMLElement>(`${selector}[${hiddenAttr}="true"]`).forEach((element) => {
-    element.style.display = ''
-    element.removeAttribute(hiddenAttr)
+const restoreManagedMedia = (media: HTMLMediaElement) => {
+  const previousMuted = media.getAttribute(MEDIA_PREVIOUS_MUTED_ATTR)
+  const previousVolume = media.getAttribute(MEDIA_PREVIOUS_VOLUME_ATTR)
+  const previousPaused = media.getAttribute(MEDIA_PREVIOUS_PAUSED_ATTR)
+
+  if (
+    previousMuted === null ||
+    previousVolume === null ||
+    previousPaused === null
+  ) {
+    return
+  }
+
+  media.muted = previousMuted === 'true'
+  media.volume = Number(previousVolume)
+
+  if (previousPaused === 'false' && media.paused) {
+    void media.play().catch(() => {
+      // Autoplay restrictions can block resume; restoring mute/volume is still useful.
+    })
+  }
+
+  media.removeAttribute(MEDIA_PREVIOUS_MUTED_ATTR)
+  media.removeAttribute(MEDIA_PREVIOUS_VOLUME_ATTR)
+  media.removeAttribute(MEDIA_PREVIOUS_PAUSED_ATTR)
+}
+
+const restoreMediaInContainers = (containers: Element[]) => {
+  containers.forEach(container => {
+    container
+      .querySelectorAll<HTMLMediaElement>('video, audio')
+      .forEach(media => {
+        restoreManagedMedia(media)
+      })
   })
 }
 
-const muteMediaInContainers = (containers: Element[]) => {
-  containers.forEach((container) => {
-    container.querySelectorAll<HTMLMediaElement>('video, audio').forEach((media) => {
-      if (!media.muted || media.volume !== 0) {
-        media.muted = true
-        media.volume = 0
-      }
+const showElements = (selector: string, hiddenAttr: string) => {
+  document
+    .querySelectorAll<HTMLElement>(`${selector}[${hiddenAttr}="true"]`)
+    .forEach(element => {
+      element.style.display = ''
+      element.removeAttribute(hiddenAttr)
+      restoreMediaInContainers([element])
     })
+}
+
+const muteMediaInContainers = (containers: Element[]) => {
+  containers.forEach(container => {
+    container
+      .querySelectorAll<HTMLMediaElement>('video, audio')
+      .forEach(media => {
+        if (!media.hasAttribute(MEDIA_PREVIOUS_MUTED_ATTR)) {
+          media.setAttribute(MEDIA_PREVIOUS_MUTED_ATTR, String(media.muted))
+          media.setAttribute(MEDIA_PREVIOUS_VOLUME_ATTR, String(media.volume))
+          media.setAttribute(MEDIA_PREVIOUS_PAUSED_ATTR, String(media.paused))
+        }
+
+        if (!media.muted || media.volume !== 0) {
+          media.muted = true
+          media.volume = 0
+        }
+      })
   })
 }
 
@@ -91,11 +164,27 @@ const muteMediaInLivePages = () => {
     return
   }
 
-  document.querySelectorAll<HTMLMediaElement>('video, audio').forEach((media) => {
+  document.querySelectorAll<HTMLMediaElement>('video, audio').forEach(media => {
+    if (!media.hasAttribute(MEDIA_PREVIOUS_MUTED_ATTR)) {
+      media.setAttribute(MEDIA_PREVIOUS_MUTED_ATTR, String(media.muted))
+      media.setAttribute(MEDIA_PREVIOUS_VOLUME_ATTR, String(media.volume))
+      media.setAttribute(MEDIA_PREVIOUS_PAUSED_ATTR, String(media.paused))
+    }
+
     if (!media.muted || media.volume !== 0) {
       media.muted = true
       media.volume = 0
     }
+  })
+}
+
+const restoreMediaInLivePages = () => {
+  if (!isLivePage()) {
+    return
+  }
+
+  document.querySelectorAll<HTMLMediaElement>('video, audio').forEach(media => {
+    restoreManagedMedia(media)
   })
 }
 
@@ -201,6 +290,7 @@ const ensureOverlayStyles = () => {
   outline: 2px solid #ff4081;
   outline-offset: 2px;
 }
+
 `
 
   document.documentElement.appendChild(style)
@@ -214,7 +304,9 @@ const removeFeedOverlay = () => {
 }
 
 const saveSettings = (nextSettings: ExtensionSettings) => {
-  chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: nextSettings })
+  chrome.storage.local.set({
+    [SETTINGS_STORAGE_KEY]: syncActiveWithPages(nextSettings),
+  })
 }
 
 const clearHomeBlocking = () => {
@@ -231,16 +323,21 @@ const clearExploreBlocking = () => {
 
 const clearLiveBlocking = () => {
   showElements(SELECTORS.livePageMainContainer, HIDDEN_LIVE_ATTR)
+  restoreMediaInLivePages()
 }
 
 const applyHomeBlocking = () => {
-  const columnListContainer = document.querySelector<HTMLElement>(SELECTORS.columnListContainer)
+  const columnListContainer = document.querySelector<HTMLElement>(
+    SELECTORS.columnListContainer,
+  )
   if (columnListContainer) {
     hideElement(columnListContainer, HIDDEN_HOME_ATTR)
     muteMediaInContainers([columnListContainer])
   }
 
-  const progressIndicator = document.querySelector<HTMLElement>(SELECTORS.progressIndicator)
+  const progressIndicator = document.querySelector<HTMLElement>(
+    SELECTORS.progressIndicator,
+  )
   if (progressIndicator) {
     hideElement(progressIndicator, HIDDEN_HOME_ATTR)
   }
@@ -257,8 +354,10 @@ const applyExploreBlocking = () => {
     containers.push(mainContent)
   }
 
-  const exploreLayouts = document.querySelectorAll<HTMLElement>(SELECTORS.exploreLayout)
-  exploreLayouts.forEach((layout) => {
+  const exploreLayouts = document.querySelectorAll<HTMLElement>(
+    SELECTORS.exploreLayout,
+  )
+  exploreLayouts.forEach(layout => {
     hideElement(layout, HIDDEN_EXPLORE_ATTR)
     containers.push(layout)
   })
@@ -298,36 +397,49 @@ const hasExploreTargets = () => {
 }
 
 const hasLiveTargets = () => {
-  return isLivePage() && document.querySelectorAll(SELECTORS.livePageMainContainer).length > 0
+  return (
+    isLivePage() &&
+    document.querySelectorAll(SELECTORS.livePageMainContainer).length > 0
+  )
+}
+
+const getCurrentPageSection = (): PageSection | null => {
+  if (hasLiveTargets()) {
+    return 'live'
+  }
+
+  if (hasExploreTargets()) {
+    return 'explore'
+  }
+
+  if (hasHomeTargets()) {
+    return 'home'
+  }
+
+  return null
+}
+
+const getPageSectionLabel = (pageSection: PageSection) => {
+  switch (pageSection) {
+    case 'home':
+      return 'Home'
+    case 'explore':
+      return 'Explore'
+    case 'live':
+      return 'Live'
+  }
 }
 
 const shouldRenderOverlay = () => {
-  if (!settings.active) {
+  const currentPageSection = getCurrentPageSection()
+  if (currentPageSection === null) {
     return false
   }
 
-  if (settings.home && hasHomeTargets()) {
-    return true
-  }
-
-  if (settings.explore && hasExploreTargets()) {
-    return true
-  }
-
-  if (settings.live && hasLiveTargets()) {
-    return true
-  }
-
-  return false
+  return settings[currentPageSection]
 }
 
 const applyCurrentSettings = () => {
-  if (!settings.active) {
-    clearAllBlocking()
-    removeFeedOverlay()
-    return
-  }
-
   if (settings.home) {
     applyHomeBlocking()
   } else {
@@ -354,17 +466,38 @@ const applyCurrentSettings = () => {
 }
 
 const handleOverlayToggle = (event: Event) => {
-  const input = event.currentTarget as HTMLInputElement
-  settings = {
-    ...settings,
-    active: input.checked,
+  const currentPageSection = getCurrentPageSection()
+  if (!currentPageSection) {
+    return
   }
+
+  const input = event.currentTarget as HTMLInputElement
+  settings = syncActiveWithPages({
+    ...settings,
+    [currentPageSection]: input.checked,
+  })
   saveSettings(settings)
   applyCurrentSettings()
 }
 
+const toggleCurrentPageBlock = () => {
+  const currentPageSection = getCurrentPageSection()
+  if (!currentPageSection) {
+    return false
+  }
+
+  settings = syncActiveWithPages({
+    ...settings,
+    [currentPageSection]: !settings[currentPageSection],
+  })
+  saveSettings(settings)
+  applyCurrentSettings()
+  return true
+}
+
 const renderFeedOverlay = () => {
-  if (!document.body || !settings.active) {
+  const currentPageSection = getCurrentPageSection()
+  if (!document.body || !currentPageSection || !isAnyPageActive(settings)) {
     removeFeedOverlay()
     return
   }
@@ -378,9 +511,9 @@ const renderFeedOverlay = () => {
     overlay.innerHTML = `
       <p class="ttfb-title">TikTok Feed Blocker Extension</p>
       <div class="ttfb-toggle-row">
-        <p class="ttfb-toggle-label">Activate all</p>
+        <p id="${OVERLAY_TOGGLE_LABEL_ID}" class="ttfb-toggle-label"></p>
         <label class="ttfb-switch">
-          <input id="${OVERLAY_TOGGLE_ID}" type="checkbox" checked />
+          <input id="${OVERLAY_TOGGLE_ID}" type="checkbox" />
           <span class="ttfb-slider"></span>
         </label>
       </div>
@@ -388,38 +521,51 @@ const renderFeedOverlay = () => {
 
     document.body.appendChild(overlay)
 
-    const toggleInput = overlay.querySelector<HTMLInputElement>(`#${OVERLAY_TOGGLE_ID}`)
+    const toggleInput = overlay.querySelector<HTMLInputElement>(
+      `#${OVERLAY_TOGGLE_ID}`,
+    )
     if (toggleInput) {
       toggleInput.addEventListener('change', handleOverlayToggle)
     }
   }
 
-  const toggleInput = overlay.querySelector<HTMLInputElement>(`#${OVERLAY_TOGGLE_ID}`)
+  const toggleLabel = overlay.querySelector<HTMLParagraphElement>(
+    `#${OVERLAY_TOGGLE_LABEL_ID}`,
+  )
+  if (toggleLabel) {
+    toggleLabel.textContent = `Block ${getPageSectionLabel(currentPageSection)}`
+  }
+
+  const toggleInput = overlay.querySelector<HTMLInputElement>(
+    `#${OVERLAY_TOGGLE_ID}`,
+  )
   if (toggleInput) {
-    toggleInput.checked = settings.active
+    toggleInput.checked = settings[currentPageSection]
   }
 }
 
-const onRuntimeMessage: Parameters<typeof chrome.runtime.onMessage.addListener>[0] = (
-  message,
-  _sender,
-  sendResponse,
-) => {
-  if (!isUpdateSettingsMessage(message)) {
+const onRuntimeMessage: Parameters<
+  typeof chrome.runtime.onMessage.addListener
+>[0] = (message, _sender, sendResponse) => {
+  if (isUpdateSettingsMessage(message)) {
+    settings = normalizeSettings(message.settings, settings)
+    applyCurrentSettings()
+
+    sendResponse({ success: true })
     return false
   }
 
-  settings = normalizeSettings(message.settings, settings)
-  applyCurrentSettings()
+  if (isToggleCurrentPageBlockMessage(message)) {
+    sendResponse({ success: toggleCurrentPageBlock() })
+    return false
+  }
 
-  sendResponse({ success: true })
   return false
 }
 
-const onStorageChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (
-  changes,
-  areaName,
-) => {
+const onStorageChanged: Parameters<
+  typeof chrome.storage.onChanged.addListener
+>[0] = (changes, areaName) => {
   if (areaName !== 'local') {
     return
   }
@@ -438,7 +584,7 @@ const setupObserver = () => {
     return
   }
 
-  observer = new MutationObserver((mutations) => {
+  observer = new MutationObserver(mutations => {
     for (const mutation of mutations) {
       if (mutation.type !== 'childList' || mutation.addedNodes.length === 0) {
         continue
@@ -472,11 +618,17 @@ const startBlockingLoop = () => {
 }
 
 const init = () => {
-  chrome.storage.local.get([SETTINGS_STORAGE_KEY, LEGACY_ACTIVE_STORAGE_KEY], (result) => {
-    settings = deriveSettingsFromStorage(result[SETTINGS_STORAGE_KEY], result[LEGACY_ACTIVE_STORAGE_KEY])
-    saveSettings(settings)
-    applyCurrentSettings()
-  })
+  chrome.storage.local.get(
+    [SETTINGS_STORAGE_KEY, LEGACY_ACTIVE_STORAGE_KEY],
+    result => {
+      settings = deriveSettingsFromStorage(
+        result[SETTINGS_STORAGE_KEY],
+        result[LEGACY_ACTIVE_STORAGE_KEY],
+      )
+      saveSettings(settings)
+      applyCurrentSettings()
+    },
+  )
 
   chrome.runtime.onMessage.addListener(onRuntimeMessage)
   chrome.storage.onChanged.addListener(onStorageChanged)
