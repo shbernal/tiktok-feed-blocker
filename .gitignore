@@ -3,3 +3,6 @@ dist
 release
 coverage
 .env*
+test-results
+playwright-report
+.e2e

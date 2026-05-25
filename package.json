@@ -10,6 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "e2e": "tsc -b && vite build && playwright test",
+    "e2e:headed": "tsc -b && vite build && playwright test --headed",
+    "e2e:ui": "tsc -b && vite build && playwright test --ui",
     "format": "prettier --check .",
     "preview": "vite preview"
   },
@@ -31,6 +34,7 @@
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.4.0",
+    "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
