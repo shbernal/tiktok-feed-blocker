@@ -1,0 +1,184 @@
+name: Publish Chrome Web Store
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: chrome-web-store
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.3.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm format
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Verify publish configuration
+        env:
+          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        run: |
+          for name in \
+            CWS_EXTENSION_ID \
+            CWS_PUBLISHER_ID \
+            GCP_PROJECT_ID \
+            GCP_SERVICE_ACCOUNT \
+            GCP_WORKLOAD_IDENTITY_PROVIDER; do
+            if [ -z "${!name}" ]; then
+              echo "$name is not set"
+              exit 1
+            fi
+          done
+
+      - name: Verify release tag matches package version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF_NAME#v}"
+
+          if [ "$version" != "$tag" ]; then
+            echo "package.json version $version does not match tag $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      - name: Zip extension
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          zip_file="tiktok-feed-blocker-${version}.zip"
+
+          cd dist
+          zip -r "../${zip_file}" .
+          cd ..
+
+          echo "ZIP_FILE=${zip_file}" >> "$GITHUB_ENV"
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+
+      - name: Upload package to Chrome Web Store
+        env:
+          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          item="publishers/${CWS_PUBLISHER_ID}/items/${CWS_EXTENSION_ID}"
+
+          curl --fail-with-body -sS \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/zip" \
+            -X POST \
+            -T "${ZIP_FILE}" \
+            "https://chromewebstore.googleapis.com/upload/v2/${item}:upload" \
+            > upload-response.json
+
+          node -e "console.log(JSON.stringify(require('./upload-response.json'), null, 2))"
+
+      - name: Wait for upload processing
+        env:
+          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          item="publishers/${CWS_PUBLISHER_ID}/items/${CWS_EXTENSION_ID}"
+          initial_state="$(node -p "require('./upload-response.json').uploadState || ''")"
+
+          if [ "$initial_state" = "SUCCEEDED" ]; then
+            echo "Upload state: SUCCEEDED"
+            exit 0
+          fi
+
+          if [ "$initial_state" = "FAILED" ]; then
+            node -e "console.log(JSON.stringify(require('./upload-response.json'), null, 2))"
+            exit 1
+          fi
+
+          for attempt in $(seq 1 30); do
+            curl --fail-with-body -sS \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -X GET \
+              "https://chromewebstore.googleapis.com/v2/${item}:fetchStatus" \
+              > status-response.json
+
+            state="$(node -p "require('./status-response.json').lastAsyncUploadState || ''")"
+            echo "Upload state: ${state:-unknown}"
+
+            if [ "$state" = "SUCCEEDED" ]; then
+              exit 0
+            fi
+
+            if [ "$state" = "FAILED" ]; then
+              node -e "console.log(JSON.stringify(require('./status-response.json'), null, 2))"
+              exit 1
+            fi
+
+            if [ "$state" != "IN_PROGRESS" ] &&
+              [ "$state" != "UPLOAD_IN_PROGRESS" ]; then
+              node -e "console.log(JSON.stringify(require('./status-response.json'), null, 2))"
+            fi
+
+            sleep 10
+          done
+
+          echo "Timed out waiting for Chrome Web Store upload processing"
+          exit 1
+
+      - name: Submit publish request
+        env:
+          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          item="publishers/${CWS_PUBLISHER_ID}/items/${CWS_EXTENSION_ID}"
+
+          curl --fail-with-body -sS \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -X POST \
+            -d '{"publishType":"DEFAULT_PUBLISH"}' \
+            "https://chromewebstore.googleapis.com/v2/${item}:publish"
+
+      - name: Attach package to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" "$ZIP_FILE" --clobber
