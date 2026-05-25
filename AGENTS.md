@@ -19,6 +19,10 @@ This is a Manifest V3 Chrome extension built with Vite, React, TypeScript, and
   toggles.
 - `src/shared/settings.ts` owns storage keys, defaults, normalization, and legacy
   settings migration.
+- `src/test/` contains shared Vitest test helpers, including the Chrome API
+  mock.
+- `docs/` contains contributor-facing documentation for tests and extension
+  internals.
 - `public/icons/` contains extension icons copied into builds.
 - `chrome-web-store/` contains store-listing screenshots.
 - `dist/` and `release/` are generated/packaged outputs and are ignored by git.
@@ -30,13 +34,16 @@ Use `pnpm`.
 - `pnpm build` - run TypeScript project build and create the extension build in
   `dist/`.
 - `pnpm typecheck` - run TypeScript checks only.
+- `pnpm test` - run the Vitest suite once.
+- `pnpm test:watch` - run Vitest in watch mode.
+- `pnpm test:coverage` - run tests with V8 coverage output.
 - `pnpm format` - check Prettier formatting.
 - `pnpm dev` - start the Vite dev server for extension development.
 - `pnpm preview` - preview the Vite build.
 
-There is no dedicated test script at the moment. For code changes, run at least
-`pnpm typecheck`; run `pnpm build` when touching manifest, content script,
-background script, popup, shared settings, icons, or packaging behavior.
+For code changes, run at least `pnpm typecheck` and `pnpm test`; run
+`pnpm build` when touching manifest, content script, background script, popup,
+shared settings, icons, or packaging behavior.
 
 ## Coding Guidelines
 
@@ -62,6 +69,17 @@ background script, popup, shared settings, icons, or packaging behavior.
   surrounding file already uses promises safely for that API.
 - Keep popup UI compact. The popup is fixed around a 320px width; avoid adding
   verbose explanatory text inside the extension UI.
+
+## Documentation Guidelines
+
+- Prefer documenting contributor-facing test, architecture, and maintenance
+  notes in `docs/`; keep `README.md` unchanged unless explicitly requested.
+- After implementation or validation runs, consider whether the work changed the
+  test workflow, settings contract, content-script DOM behavior, Chrome API
+  assumptions, or packaging behavior. If it did, update the relevant docs in the
+  same change.
+- Keep docs concise and tied to the current code. Avoid speculative roadmap
+  notes unless the user asks for planning documentation.
 
 ## Generated And Release Files
 
