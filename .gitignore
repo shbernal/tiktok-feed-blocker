@@ -3,3 +3,5 @@ dist
 release
 .env*
 AGENTS.md
+
+.codex
