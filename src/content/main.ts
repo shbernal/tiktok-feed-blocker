@@ -617,7 +617,7 @@ const startBlockingLoop = () => {
   }, 1000)
 }
 
-const init = () => {
+export const initContentScript = () => {
   chrome.storage.local.get(
     [SETTINGS_STORAGE_KEY, LEGACY_ACTIVE_STORAGE_KEY],
     result => {
@@ -636,7 +636,7 @@ const init = () => {
   startBlockingLoop()
 }
 
-const cleanup = () => {
+export const cleanupContentScript = () => {
   chrome.runtime.onMessage.removeListener(onRuntimeMessage)
   chrome.storage.onChanged.removeListener(onStorageChanged)
   removeFeedOverlay()
@@ -657,15 +657,23 @@ const cleanup = () => {
   }
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init, { once: true })
-} else {
-  init()
+const startContentScript = () => {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initContentScript, {
+      once: true,
+    })
+  } else {
+    initContentScript()
+  }
+}
+
+if (import.meta.env.MODE !== 'test' && typeof chrome !== 'undefined') {
+  startContentScript()
 }
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
-    cleanup()
+    cleanupContentScript()
     clearAllBlocking()
   })
 }

@@ -1,23 +1,9 @@
+import { isTikTokUrl } from '../shared/tiktok'
+
 const TOGGLE_CURRENT_PAGE_COMMAND = 'toggle-current-page-block'
-const TIKTOK_HOST_SUFFIX = '.tiktok.com'
 
 type ToggleCurrentPageBlockMessage = {
   action: 'toggleCurrentPageBlock'
-}
-
-const isTikTokUrl = (value: string | undefined) => {
-  if (!value) {
-    return false
-  }
-
-  try {
-    const url = new URL(value)
-    return (
-      url.hostname === 'tiktok.com' || url.hostname.endsWith(TIKTOK_HOST_SUFFIX)
-    )
-  } catch {
-    return false
-  }
 }
 
 chrome.commands.onCommand.addListener(async command => {

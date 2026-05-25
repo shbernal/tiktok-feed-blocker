@@ -108,6 +108,7 @@ function App() {
             </span>
             <label className="switch">
               <input
+                aria-label="Block all pages"
                 type="checkbox"
                 checked={isAllPagesActive(settings)}
                 onChange={toggleAllPages}
@@ -120,6 +121,7 @@ function App() {
             <span className="switch-label">Block Home</span>
             <label className="switch switch-small">
               <input
+                aria-label="Block Home"
                 type="checkbox"
                 checked={settings.home}
                 onChange={() => toggleSection('home')}
@@ -132,6 +134,7 @@ function App() {
             <span className="switch-label">Block Explore</span>
             <label className="switch switch-small">
               <input
+                aria-label="Block Explore"
                 type="checkbox"
                 checked={settings.explore}
                 onChange={() => toggleSection('explore')}
@@ -144,6 +147,7 @@ function App() {
             <span className="switch-label">Block Live</span>
             <label className="switch switch-small">
               <input
+                aria-label="Block Live"
                 type="checkbox"
                 checked={settings.live}
                 onChange={() => toggleSection('live')}

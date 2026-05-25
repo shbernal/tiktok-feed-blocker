@@ -1,0 +1,140 @@
+import { fireEvent } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SETTINGS_STORAGE_KEY } from '../shared/settings'
+import { getChromeMock } from '../test/chrome'
+import { cleanupContentScript, initContentScript } from './main'
+
+const OVERLAY_ID = 'ttfb-feed-overlay'
+const OVERLAY_TOGGLE_ID = 'ttfb-active-toggle'
+const OVERLAY_TOGGLE_LABEL_ID = 'ttfb-active-toggle-label'
+
+describe('content script', () => {
+  afterEach(() => {
+    cleanupContentScript()
+  })
+
+  it('hides home targets, mutes managed media, and restores them when disabled', () => {
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: true,
+        explore: false,
+        live: false,
+      },
+    })
+    document.body.innerHTML = `
+      <div id="column-list-container">
+        <video></video>
+      </div>
+      <div class="progress-js-inner"></div>
+    `
+
+    const columnList = document.querySelector<HTMLElement>(
+      '#column-list-container',
+    )
+    const video = document.querySelector<HTMLVideoElement>('video')
+
+    expect(columnList).not.toBeNull()
+    expect(video).not.toBeNull()
+
+    video!.muted = false
+    video!.volume = 0.75
+
+    initContentScript()
+
+    expect(columnList!.style.display).toBe('none')
+    expect(columnList).toHaveAttribute('data-ttfb-home-hidden', 'true')
+    expect(video!.muted).toBe(true)
+    expect(video!.volume).toBe(0)
+
+    chromeMock.storage.local.set({
+      [SETTINGS_STORAGE_KEY]: {
+        active: false,
+        home: false,
+        explore: false,
+        live: false,
+      },
+    })
+
+    expect(columnList!.style.display).toBe('')
+    expect(columnList).not.toHaveAttribute('data-ttfb-home-hidden')
+    expect(video!.muted).toBe(false)
+    expect(video!.volume).toBe(0.75)
+  })
+
+  it('renders an overlay for a blocked explore page and persists overlay toggles', () => {
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: false,
+        explore: true,
+        live: false,
+      },
+    })
+    document.body.innerHTML = '<main id="main-content-explore_page"></main>'
+
+    initContentScript()
+
+    const overlay = document.getElementById(OVERLAY_ID)
+    const toggleLabel = document.getElementById(OVERLAY_TOGGLE_LABEL_ID)
+    const toggle = document.getElementById(
+      OVERLAY_TOGGLE_ID,
+    ) as HTMLInputElement | null
+
+    expect(overlay).not.toBeNull()
+    expect(toggleLabel).toHaveTextContent('Block Explore')
+    expect(toggle).not.toBeNull()
+    expect(toggle).toBeChecked()
+
+    toggle!.checked = false
+    fireEvent.change(toggle!)
+
+    expect(chromeMock.storage.local.set).toHaveBeenLastCalledWith({
+      [SETTINGS_STORAGE_KEY]: {
+        active: false,
+        home: false,
+        explore: false,
+        live: false,
+      },
+    })
+    expect(document.getElementById(OVERLAY_ID)).toBeNull()
+  })
+
+  it('handles runtime messages that toggle the current page section', () => {
+    const chromeMock = getChromeMock()
+    const sendResponse = vi.fn()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: true,
+        explore: false,
+        live: false,
+      },
+    })
+    document.body.innerHTML = '<div id="column-list-container"></div>'
+
+    initContentScript()
+
+    const [listener] = chromeMock.runtime.onMessage.listeners()
+    const result = listener?.(
+      {
+        action: 'toggleCurrentPageBlock',
+      },
+      {},
+      sendResponse,
+    )
+
+    expect(result).toBe(false)
+    expect(sendResponse).toHaveBeenCalledWith({ success: true })
+    expect(chromeMock.storage.local.set).toHaveBeenLastCalledWith({
+      [SETTINGS_STORAGE_KEY]: {
+        active: false,
+        home: false,
+        explore: false,
+        live: false,
+      },
+    })
+  })
+})
