@@ -34,9 +34,10 @@ popup controls, content-script behavior, and tests together.
 
 ## Background Command Flow
 
-`src/background/main.ts` listens for the `toggle-current-page-block` command.
-When the command fires, it queries the active tab, checks that the tab URL is on
-TikTok using `src/shared/tiktok.ts`, and sends this content-script message:
+`src/background/main.ts` listens for the `toggle-current-page-block` command,
+currently suggested as `Ctrl+Shift+8` (`Command+Shift+8` on macOS). When the
+command fires, it queries the active tab, checks that the tab URL is on TikTok
+using `src/shared/tiktok.ts`, and sends this content-script message:
 
 ```ts
 {
@@ -47,6 +48,12 @@ TikTok using `src/shared/tiktok.ts`, and sends this content-script message:
 The background script intentionally ignores missing tab IDs, non-TikTok URLs,
 and expected `sendMessage` failures from tabs without an injected content
 script.
+
+The content script also listens for the same focused-page shortcut directly.
+That page-level listener is the more reliable path on environments where
+Chrome's extension command dispatch does not fire for number-row shortcuts. It
+ignores editable fields and uses a short duplicate guard so a working Chrome
+command and the page-level listener do not double-toggle the page.
 
 ## Popup Flow
 
@@ -74,6 +81,8 @@ The popup should stay compact because it is designed around a 320px width.
 - restoring hidden elements and media state when blocking is disabled;
 - rendering the in-page overlay toggle;
 - reacting to storage changes and runtime messages;
+- toggling the current supported page when `Ctrl+Shift+8` is pressed on a
+  focused TikTok page outside editable fields;
 - using a mutation observer and interval loop to reapply blocking as TikTok
   updates the page.
 

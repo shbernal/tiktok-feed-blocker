@@ -40,6 +40,8 @@ type ToggleCurrentPageBlockMessage = {
   action: 'toggleCurrentPageBlock'
 }
 
+const SHORTCUT_DUPLICATE_WINDOW_MS = 500
+
 let settings: ExtensionSettings = {
   active: true,
   home: true,
@@ -48,6 +50,7 @@ let settings: ExtensionSettings = {
 }
 let observer: MutationObserver | null = null
 let intervalId: number | null = null
+let lastShortcutToggleAt = 0
 
 const isUpdateSettingsMessage = (
   message: unknown,
@@ -495,6 +498,50 @@ const toggleCurrentPageBlock = () => {
   return true
 }
 
+const toggleCurrentPageBlockFromShortcut = () => {
+  lastShortcutToggleAt = Date.now()
+  return toggleCurrentPageBlock()
+}
+
+const wasRecentlyToggledByShortcut = () => {
+  return Date.now() - lastShortcutToggleAt < SHORTCUT_DUPLICATE_WINDOW_MS
+}
+
+const isTextInputTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  const tagName = target.tagName.toLowerCase()
+  return (
+    target.isContentEditable ||
+    tagName === 'input' ||
+    tagName === 'select' ||
+    tagName === 'textarea'
+  )
+}
+
+const isToggleShortcut = (event: KeyboardEvent) => {
+  return (
+    event.ctrlKey &&
+    event.shiftKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    event.code === 'Digit8'
+  )
+}
+
+const onKeyDown = (event: KeyboardEvent) => {
+  if (!isToggleShortcut(event) || isTextInputTarget(event.target)) {
+    return
+  }
+
+  if (toggleCurrentPageBlockFromShortcut()) {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+}
+
 const renderFeedOverlay = () => {
   const currentPageSection = getCurrentPageSection()
   if (!document.body || !currentPageSection || !isAnyPageActive(settings)) {
@@ -556,6 +603,11 @@ const onRuntimeMessage: Parameters<
   }
 
   if (isToggleCurrentPageBlockMessage(message)) {
+    if (wasRecentlyToggledByShortcut()) {
+      sendResponse({ success: true })
+      return false
+    }
+
     sendResponse({ success: toggleCurrentPageBlock() })
     return false
   }
@@ -632,6 +684,7 @@ export const initContentScript = () => {
 
   chrome.runtime.onMessage.addListener(onRuntimeMessage)
   chrome.storage.onChanged.addListener(onStorageChanged)
+  document.addEventListener('keydown', onKeyDown, true)
   setupObserver()
   startBlockingLoop()
 }
@@ -639,6 +692,7 @@ export const initContentScript = () => {
 export const cleanupContentScript = () => {
   chrome.runtime.onMessage.removeListener(onRuntimeMessage)
   chrome.storage.onChanged.removeListener(onStorageChanged)
+  document.removeEventListener('keydown', onKeyDown, true)
   removeFeedOverlay()
 
   const style = document.getElementById(OVERLAY_STYLE_ID)

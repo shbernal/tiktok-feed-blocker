@@ -137,4 +137,63 @@ describe('content script', () => {
       },
     })
   })
+
+  it('toggles the current page section from the focused page shortcut', () => {
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: true,
+        explore: false,
+        live: false,
+      },
+    })
+    document.body.innerHTML = '<div id="column-list-container"></div>'
+
+    initContentScript()
+
+    fireEvent.keyDown(document.body, {
+      code: 'Digit8',
+      ctrlKey: true,
+      shiftKey: true,
+    })
+
+    expect(chromeMock.storage.local.set).toHaveBeenLastCalledWith({
+      [SETTINGS_STORAGE_KEY]: {
+        active: false,
+        home: false,
+        explore: false,
+        live: false,
+      },
+    })
+  })
+
+  it('ignores the focused page shortcut inside editable fields', () => {
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: true,
+        explore: false,
+        live: false,
+      },
+    })
+    document.body.innerHTML = `
+      <input id="search" />
+      <div id="column-list-container"></div>
+    `
+
+    initContentScript()
+
+    const search = document.getElementById('search')
+    expect(search).not.toBeNull()
+
+    fireEvent.keyDown(search!, {
+      code: 'Digit8',
+      ctrlKey: true,
+      shiftKey: true,
+    })
+
+    expect(chromeMock.storage.local.set).toHaveBeenCalledTimes(1)
+  })
 })
