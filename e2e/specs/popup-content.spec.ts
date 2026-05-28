@@ -28,7 +28,12 @@ test('popup changes update an open TikTok fixture page', async ({
 
   const mainContent = page.locator('#main-content-explore_page')
   await expect(mainContent).toHaveCSS('display', 'block')
-  await expect(page.locator('#ttfb-feed-overlay')).toHaveCount(0)
+  await expect(page.locator('#ttfb-feed-overlay')).toHaveClass(
+    /ttfb-overlay-available/,
+  )
+  await expect(page.locator('#ttfb-feed-overlay-block-button')).toHaveText(
+    'Block Explore',
+  )
 
   const popup = await openExtensionPage('/src/popup/index.html')
   await expect(popup.getByLabel('Block Explore')).not.toBeChecked()

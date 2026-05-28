@@ -121,7 +121,8 @@ event, matching the behavior that popup and content-script code depends on.
 - `src/popup/App.test.tsx` covers loading stored settings, toggling all pages,
   toggling one section, persistence, and tab notifications.
 - `src/content/main.test.ts` covers DOM hiding/restoring, managed media
-  mute/restore, overlay toggles, storage changes, and runtime messages.
+  mute/restore, blocked and unblocked overlay controls, storage changes, and
+  runtime messages.
 
 ## Adding Tests
 

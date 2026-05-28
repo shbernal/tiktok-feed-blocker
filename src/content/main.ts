@@ -1,7 +1,6 @@
 import {
   deriveSettingsFromStorage,
   type PageSection,
-  isAnyPageActive,
   LEGACY_ACTIVE_STORAGE_KEY,
   normalizeSettings,
   SETTINGS_STORAGE_KEY,
@@ -13,6 +12,7 @@ const OVERLAY_ID = 'ttfb-feed-overlay'
 const OVERLAY_STYLE_ID = 'ttfb-feed-overlay-style'
 const OVERLAY_TOGGLE_ID = 'ttfb-active-toggle'
 const OVERLAY_TOGGLE_LABEL_ID = 'ttfb-active-toggle-label'
+const OVERLAY_BLOCK_BUTTON_ID = 'ttfb-feed-overlay-block-button'
 const HIDDEN_HOME_ATTR = 'data-ttfb-home-hidden'
 const HIDDEN_EXPLORE_ATTR = 'data-ttfb-explore-hidden'
 const HIDDEN_LIVE_ATTR = 'data-ttfb-live-hidden'
@@ -208,10 +208,14 @@ const ensureOverlayStyles = () => {
   style.textContent = `
 #${OVERLAY_ID} {
   position: fixed;
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+#${OVERLAY_ID}.ttfb-overlay-blocked {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 2147483647;
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 16px;
@@ -219,7 +223,17 @@ const ensureOverlayStyles = () => {
   padding: 20px 24px;
   min-width: 320px;
   text-align: center;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+#${OVERLAY_ID}.ttfb-overlay-available {
+  top: 16px;
+  right: 16px;
+  max-width: calc(100vw - 32px);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18);
+  padding: 8px;
 }
 
 .ttfb-title {
@@ -299,6 +313,42 @@ const ensureOverlayStyles = () => {
 .ttfb-switch input:focus + .ttfb-slider {
   outline: 2px solid #ff4081;
   outline-offset: 2px;
+}
+
+.ttfb-block-button {
+  appearance: none;
+  background: #111;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  min-height: 36px;
+  padding: 0 14px;
+}
+
+.ttfb-block-button:hover {
+  background: #ff0050;
+}
+
+.ttfb-block-button:focus {
+  outline: 2px solid #ff4081;
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  #${OVERLAY_ID}.ttfb-overlay-blocked {
+    min-width: 0;
+    width: calc(100vw - 40px);
+  }
+
+  #${OVERLAY_ID}.ttfb-overlay-available {
+    top: 12px;
+    right: 12px;
+    max-width: calc(100vw - 24px);
+  }
 }
 
 `
@@ -444,11 +494,7 @@ const getPageSectionLabel = (pageSection: PageSection) => {
 
 const shouldRenderOverlay = () => {
   const currentPageSection = getCurrentPageSection()
-  if (currentPageSection === null) {
-    return false
-  }
-
-  return settings[currentPageSection]
+  return currentPageSection !== null
 }
 
 const applyCurrentSettings = () => {
@@ -477,19 +523,28 @@ const applyCurrentSettings = () => {
   }
 }
 
-const handleOverlayToggle = (event: Event) => {
+const setCurrentPageBlocking = (enabled: boolean) => {
   const currentPageSection = getCurrentPageSection()
   if (!currentPageSection) {
-    return
+    return false
   }
 
-  const input = event.currentTarget as HTMLInputElement
   settings = syncActiveWithPages({
     ...settings,
-    [currentPageSection]: input.checked,
+    [currentPageSection]: enabled,
   })
   saveSettings(settings)
   applyCurrentSettings()
+  return true
+}
+
+const handleOverlayToggle = (event: Event) => {
+  const input = event.currentTarget as HTMLInputElement
+  setCurrentPageBlocking(input.checked)
+}
+
+const handleOverlayBlock = () => {
+  setCurrentPageBlocking(true)
 }
 
 const toggleCurrentPageBlock = () => {
@@ -498,13 +553,7 @@ const toggleCurrentPageBlock = () => {
     return false
   }
 
-  settings = syncActiveWithPages({
-    ...settings,
-    [currentPageSection]: !settings[currentPageSection],
-  })
-  saveSettings(settings)
-  applyCurrentSettings()
-  return true
+  return setCurrentPageBlocking(!settings[currentPageSection])
 }
 
 const toggleCurrentPageBlockFromShortcut = () => {
@@ -553,50 +602,84 @@ const onKeyDown = (event: KeyboardEvent) => {
 
 const renderFeedOverlay = () => {
   const currentPageSection = getCurrentPageSection()
-  if (!document.body || !currentPageSection || !isAnyPageActive(settings)) {
+  if (!document.body || !currentPageSection) {
     removeFeedOverlay()
     return
   }
 
   ensureOverlayStyles()
 
+  const isBlocked = settings[currentPageSection]
+  const overlayState = isBlocked ? 'blocked' : 'available'
+  const pageSectionLabel = getPageSectionLabel(currentPageSection)
   let overlay = document.getElementById(OVERLAY_ID)
   if (!overlay) {
     overlay = document.createElement('div')
     overlay.id = OVERLAY_ID
-    overlay.innerHTML = `
-      <p class="ttfb-title">TikTok Feed Blocker Extension</p>
-      <div class="ttfb-toggle-row">
-        <p id="${OVERLAY_TOGGLE_LABEL_ID}" class="ttfb-toggle-label"></p>
-        <label class="ttfb-switch">
-          <input id="${OVERLAY_TOGGLE_ID}" type="checkbox" />
-          <span class="ttfb-slider"></span>
-        </label>
-      </div>
-    `
-
     document.body.appendChild(overlay)
+  }
 
-    const toggleInput = overlay.querySelector<HTMLInputElement>(
-      `#${OVERLAY_TOGGLE_ID}`,
-    )
-    if (toggleInput) {
-      toggleInput.addEventListener('change', handleOverlayToggle)
+  overlay.className = `ttfb-overlay-${overlayState}`
+
+  if (overlay.dataset.ttfbState !== overlayState) {
+    overlay.dataset.ttfbState = overlayState
+
+    if (isBlocked) {
+      overlay.innerHTML = `
+        <p class="ttfb-title">TikTok Feed Blocker Extension</p>
+        <div class="ttfb-toggle-row">
+          <p id="${OVERLAY_TOGGLE_LABEL_ID}" class="ttfb-toggle-label"></p>
+          <label class="ttfb-switch">
+            <input id="${OVERLAY_TOGGLE_ID}" type="checkbox" />
+            <span class="ttfb-slider"></span>
+          </label>
+        </div>
+      `
+
+      const toggleInput = overlay.querySelector<HTMLInputElement>(
+        `#${OVERLAY_TOGGLE_ID}`,
+      )
+      if (toggleInput) {
+        toggleInput.addEventListener('change', handleOverlayToggle)
+      }
+    } else {
+      overlay.innerHTML = `
+        <button
+          id="${OVERLAY_BLOCK_BUTTON_ID}"
+          class="ttfb-block-button"
+          type="button"
+        ></button>
+      `
+
+      const blockButton = overlay.querySelector<HTMLButtonElement>(
+        `#${OVERLAY_BLOCK_BUTTON_ID}`,
+      )
+      if (blockButton) {
+        blockButton.addEventListener('click', handleOverlayBlock)
+      }
     }
+  }
+
+  const blockButton = overlay.querySelector<HTMLButtonElement>(
+    `#${OVERLAY_BLOCK_BUTTON_ID}`,
+  )
+  if (blockButton) {
+    blockButton.textContent = `Block ${pageSectionLabel}`
+    blockButton.setAttribute('aria-label', `Block ${pageSectionLabel}`)
   }
 
   const toggleLabel = overlay.querySelector<HTMLParagraphElement>(
     `#${OVERLAY_TOGGLE_LABEL_ID}`,
   )
   if (toggleLabel) {
-    toggleLabel.textContent = `Block ${getPageSectionLabel(currentPageSection)}`
+    toggleLabel.textContent = `Block ${pageSectionLabel}`
   }
 
   const toggleInput = overlay.querySelector<HTMLInputElement>(
     `#${OVERLAY_TOGGLE_ID}`,
   )
   if (toggleInput) {
-    toggleInput.checked = settings[currentPageSection]
+    toggleInput.checked = isBlocked
   }
 }
 

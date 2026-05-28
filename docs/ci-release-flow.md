@@ -96,14 +96,25 @@ path.
    pnpm format
    pnpm typecheck
    pnpm test
+   pnpm e2e
    pnpm build
    ```
 
-3. Commit the version bump.
-4. Push `main`.
-5. Publish a GitHub Release with a matching tag, for example `v1.2.0`.
-6. Watch the `Publish Chrome Web Store` GitHub Actions run.
-7. Confirm Chrome Web Store shows the new version as submitted or published.
+3. For content-script, selector, or in-page UI changes, run the real-site smoke
+   suite with the local authenticated profile and confirm the generated overlay
+   proof artifacts when overlays are part of the change:
+
+   ```sh
+   TIKTOK_REAL_PROFILE_DIR=.e2e/tiktok-injected-profile pnpm e2e:real
+   ```
+
+4. Check whether `chrome-web-store/description.txt` or listing screenshots need
+   updates for the user-facing change.
+5. Commit the release candidate and version bump.
+6. Push `main`.
+7. Publish a GitHub Release with a matching tag, for example `v1.2.0`.
+8. Watch the `Publish Chrome Web Store` GitHub Actions run.
+9. Confirm Chrome Web Store shows the new version as submitted or published.
 
 Chrome Web Store rejects reused extension versions, so every release must bump
 `package.json` before publishing.

@@ -80,7 +80,9 @@ The popup should stay compact because it is designed around a 320px width.
   Home comments sidebar when it is already open from the feed;
 - muting media while preserving previous muted, volume, and paused state;
 - restoring hidden elements and media state when blocking is disabled;
-- rendering the in-page overlay toggle;
+- rendering the in-page overlay, with a centered toggle while a section is
+  blocked and a compact top-right corner button while the current section is
+  unblocked;
 - reacting to storage changes and runtime messages;
 - toggling the current supported page when `Ctrl+Shift+8` is pressed on a
   focused TikTok page outside editable fields;

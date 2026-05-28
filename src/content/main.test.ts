@@ -7,6 +7,7 @@ import { cleanupContentScript, initContentScript } from './main'
 const OVERLAY_ID = 'ttfb-feed-overlay'
 const OVERLAY_TOGGLE_ID = 'ttfb-active-toggle'
 const OVERLAY_TOGGLE_LABEL_ID = 'ttfb-active-toggle-label'
+const OVERLAY_BLOCK_BUTTON_ID = 'ttfb-feed-overlay-block-button'
 
 describe('content script', () => {
   afterEach(() => {
@@ -137,6 +138,7 @@ describe('content script', () => {
     ) as HTMLInputElement | null
 
     expect(overlay).not.toBeNull()
+    expect(overlay).toHaveClass('ttfb-overlay-blocked')
     expect(toggleLabel).toHaveTextContent('Block Explore')
     expect(toggle).not.toBeNull()
     expect(toggle).toBeChecked()
@@ -152,7 +154,56 @@ describe('content script', () => {
         live: false,
       },
     })
-    expect(document.getElementById(OVERLAY_ID)).toBeNull()
+
+    const availableOverlay = document.getElementById(OVERLAY_ID)
+    const blockButton = document.getElementById(OVERLAY_BLOCK_BUTTON_ID)
+
+    expect(availableOverlay).not.toBeNull()
+    expect(availableOverlay).toHaveClass('ttfb-overlay-available')
+    expect(blockButton).toHaveTextContent('Block Explore')
+  })
+
+  it('renders a top-right corner overlay for an unblocked page and persists the block action', () => {
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: false,
+        home: false,
+        explore: false,
+        live: false,
+      },
+    })
+    document.body.innerHTML = '<div id="column-list-container"></div>'
+
+    initContentScript()
+
+    const columnList = document.querySelector<HTMLElement>(
+      '#column-list-container',
+    )
+    const overlay = document.getElementById(OVERLAY_ID)
+    const blockButton = document.getElementById(OVERLAY_BLOCK_BUTTON_ID)
+
+    expect(columnList).not.toBeNull()
+    expect(columnList!.style.display).toBe('')
+    expect(overlay).not.toBeNull()
+    expect(overlay).toHaveClass('ttfb-overlay-available')
+    expect(blockButton).toHaveTextContent('Block Home')
+
+    fireEvent.click(blockButton!)
+
+    expect(chromeMock.storage.local.set).toHaveBeenLastCalledWith({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: true,
+        explore: false,
+        live: false,
+      },
+    })
+    expect(columnList!.style.display).toBe('none')
+    expect(columnList).toHaveAttribute('data-ttfb-home-hidden', 'true')
+    expect(document.getElementById(OVERLAY_ID)).toHaveClass(
+      'ttfb-overlay-blocked',
+    )
   })
 
   it('handles runtime messages that toggle the current page section', () => {
