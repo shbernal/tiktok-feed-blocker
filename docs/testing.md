@@ -79,6 +79,13 @@ unavailable for the test account or region. Set
 `TIKTOK_REAL_PROFILE_DIR=.e2e/tiktok-injected-profile` to use the local
 cookie-imported fallback profile.
 
+Real overlay assertions attach screenshot proof for every overlay state that
+must be visible: a full viewport screenshot, a cropped overlay screenshot, and a
+JSON file with the overlay text, class name, computed CSS, viewport size, and
+bounding box. For overlay work, fixture E2E is not enough by itself; run the
+real TikTok smoke test and check the generated `test-results/` artifacts before
+calling the iteration complete.
+
 Run `pnpm e2e:real:open` when you only want to inspect TikTok manually without
 running tests. The command prints a small logged-in signal based on visible
 login buttons and session cookie names, then keeps Chromium open until the
