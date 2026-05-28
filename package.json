@@ -17,6 +17,7 @@
     "e2e:real": "tsc -b && vite build && RUN_REAL_TIKTOK_E2E=1 playwright test -c playwright.real.config.ts --grep-invert @setup --headed",
     "e2e:real:open": "node scripts/open-real-tiktok.mjs",
     "e2e:real:open:extension": "tsc -b && vite build && TIKTOK_REAL_OPEN_EXTENSION=1 node scripts/open-real-tiktok.mjs",
+    "manual:tiktok": "tsc -b && vite build && playwright test -c playwright.manual.config.ts --headed",
     "format": "prettier --check .",
     "preview": "vite preview"
   },

@@ -131,6 +131,15 @@ Open with the built extension loaded:
 TIKTOK_REAL_PROFILE_DIR=.e2e/tiktok-injected-profile pnpm e2e:real:open:extension
 ```
 
+Open a no-timeout manual Playwright session with the built extension loaded:
+
+```bash
+TIKTOK_REAL_PROFILE_DIR=.e2e/tiktok-injected-profile pnpm manual:tiktok
+```
+
+Set `TIKTOK_MANUAL_URL=https://www.tiktok.com/explore` to start on another
+TikTok route. The default start URL is `https://www.tiktok.com/`.
+
 ## Expected Verification
 
 Before relying on a real profile for selector checks, run:

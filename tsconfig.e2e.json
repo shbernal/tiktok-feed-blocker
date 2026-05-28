@@ -18,5 +18,10 @@
     "skipLibCheck": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["playwright.config.ts", "playwright.real.config.ts", "e2e"]
+  "include": [
+    "playwright.config.ts",
+    "playwright.manual.config.ts",
+    "playwright.real.config.ts",
+    "e2e"
+  ]
 }
