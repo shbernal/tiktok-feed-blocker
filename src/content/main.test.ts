@@ -63,6 +63,59 @@ describe('content script', () => {
     expect(video!.volume).toBe(0.75)
   })
 
+  it('hides an open home comments sidebar and restores it when disabled', () => {
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: true,
+        explore: false,
+        live: false,
+      },
+    })
+    document.body.innerHTML = `
+      <div id="column-list-container"></div>
+      <aside>
+        <div class="DivCommentSidebarTransitionWrapper-fixture">
+          <section class="SectionCommentSidebarContainer-fixture">
+            Comments 3150
+          </section>
+        </div>
+      </aside>
+    `
+
+    const commentWrapper = document.querySelector<HTMLElement>(
+      '.DivCommentSidebarTransitionWrapper-fixture',
+    )
+    const commentSidebar = document.querySelector<HTMLElement>(
+      '.SectionCommentSidebarContainer-fixture',
+    )
+
+    expect(commentWrapper).not.toBeNull()
+    expect(commentSidebar).not.toBeNull()
+
+    initContentScript()
+
+    expect(commentWrapper!.style.display).toBe('none')
+    expect(commentWrapper).toHaveAttribute('data-ttfb-home-hidden', 'true')
+    expect(commentSidebar!.style.display).toBe('none')
+    expect(commentSidebar).toHaveAttribute('data-ttfb-home-hidden', 'true')
+
+    chromeMock.storage.local.set({
+      [SETTINGS_STORAGE_KEY]: {
+        active: false,
+        home: false,
+        explore: false,
+        live: false,
+      },
+    })
+
+    expect(commentWrapper!.style.display).toBe('')
+    expect(commentWrapper).not.toHaveAttribute('data-ttfb-home-hidden')
+    expect(commentSidebar!.style.display).toBe('')
+    expect(commentSidebar).not.toHaveAttribute('data-ttfb-home-hidden')
+  })
+
   it('renders an overlay for a blocked explore page and persists overlay toggles', () => {
     const chromeMock = getChromeMock()
     chromeMock.storage.local.seed({

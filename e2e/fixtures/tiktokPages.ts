@@ -28,6 +28,11 @@ const pageShell = (title: string, body: string) => `<!doctype html>
         min-height: 420px;
         padding: 24px;
       }
+
+      .DivCommentSidebarTransitionWrapper-fixture,
+      .SectionCommentSidebarContainer-fixture {
+        display: block;
+      }
     </style>
   </head>
   <body>
@@ -46,6 +51,16 @@ const homePage = pageShell(
       <h1>Home feed fixture</h1>
       <video id="home-video"></video>
     </main>
+    <aside class="AsideOneColumnSidebar-fixture">
+      <div class="DivCommentSidebarTransitionWrapper-fixture">
+        <section
+          id="home-comment-sidebar"
+          class="SectionCommentSidebarContainer-fixture"
+        >
+          Comments fixture
+        </section>
+      </div>
+    </aside>
   `,
 )
 

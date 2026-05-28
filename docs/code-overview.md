@@ -76,7 +76,8 @@ The popup should stay compact because it is designed around a 320px width.
 `src/content/main.ts` runs on TikTok pages. It owns DOM mutation behavior:
 
 - detecting Home, Explore, and Live targets;
-- hiding matching page containers with managed data attributes;
+- hiding matching page containers with managed data attributes, including the
+  Home comments sidebar when it is already open from the feed;
 - muting media while preserving previous muted, volume, and paused state;
 - restoring hidden elements and media state when blocking is disabled;
 - rendering the in-page overlay toggle;

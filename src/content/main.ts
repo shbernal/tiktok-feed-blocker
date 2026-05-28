@@ -20,10 +20,16 @@ const MEDIA_PREVIOUS_MUTED_ATTR = 'data-ttfb-previous-muted'
 const MEDIA_PREVIOUS_VOLUME_ATTR = 'data-ttfb-previous-volume'
 const MEDIA_PREVIOUS_PAUSED_ATTR = 'data-ttfb-previous-paused'
 
+const HOME_COMMENT_SIDEBAR_SELECTORS = [
+  '[class*="DivCommentSidebarTransitionWrapper"]',
+  'section[class*="SectionCommentSidebarContainer"]',
+] as const
+
 const SELECTORS = {
   mainContent: '#main-content-explore_page',
   progressIndicator: '.progress-js-inner',
   columnListContainer: '#column-list-container',
+  homeCommentSidebar: `:is(${HOME_COMMENT_SIDEBAR_SELECTORS.join(', ')})`,
   exploreLayout:
     '[class*="DivShareLayoutBase-StyledShareLayoutV2-ExploreLayout"]',
   feedNavigationContainer: '[class*="DivFeedNavigationContainer"]',
@@ -316,6 +322,7 @@ const saveSettings = (nextSettings: ExtensionSettings) => {
 const clearHomeBlocking = () => {
   showElements(SELECTORS.columnListContainer, HIDDEN_HOME_ATTR)
   showElements(SELECTORS.progressIndicator, HIDDEN_HOME_ATTR)
+  showElements(SELECTORS.homeCommentSidebar, HIDDEN_HOME_ATTR)
   showElements(SELECTORS.feedNavigationContainer, HIDDEN_HOME_ATTR)
   showElements(SELECTORS.progressElements, HIDDEN_HOME_ATTR)
 }
@@ -348,6 +355,7 @@ const applyHomeBlocking = () => {
 
   hideElements(SELECTORS.feedNavigationContainer, HIDDEN_HOME_ATTR)
   hideElements(SELECTORS.progressElements, HIDDEN_HOME_ATTR)
+  hideElements(SELECTORS.homeCommentSidebar, HIDDEN_HOME_ATTR)
 }
 
 const applyExploreBlocking = () => {

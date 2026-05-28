@@ -42,8 +42,14 @@ test('blocks and restores Home targets', async ({
   await page.goto('https://www.tiktok.com/')
 
   const homeTarget = page.locator('#column-list-container')
+  const homeCommentSidebar = page.locator('#home-comment-sidebar')
   await expect(homeTarget).toHaveCSS('display', 'none')
   await expect(homeTarget).toHaveAttribute('data-ttfb-home-hidden', 'true')
+  await expect(homeCommentSidebar).toHaveCSS('display', 'none')
+  await expect(homeCommentSidebar).toHaveAttribute(
+    'data-ttfb-home-hidden',
+    'true',
+  )
   await expect(page.locator('#ttfb-feed-overlay')).toBeVisible()
   await expect(page.locator('#ttfb-active-toggle-label')).toHaveText(
     'Block Home',
@@ -55,6 +61,11 @@ test('blocks and restores Home targets', async ({
   await expect(page.locator('#ttfb-feed-overlay')).toHaveCount(0)
   await expect(homeTarget).toHaveCSS('display', 'block')
   await expect(homeTarget).not.toHaveAttribute('data-ttfb-home-hidden', 'true')
+  await expect(homeCommentSidebar).toHaveCSS('display', 'block')
+  await expect(homeCommentSidebar).not.toHaveAttribute(
+    'data-ttfb-home-hidden',
+    'true',
+  )
   await expectMediaState(page, '#home-video', { muted: false, volume: 0.75 })
   await expect.poll(readSettings).toMatchObject({
     active: false,
