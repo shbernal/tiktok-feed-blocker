@@ -10,6 +10,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   document.body.innerHTML = ''
+  window.history.replaceState({}, '', '/')
   vi.useRealTimers()
   vi.restoreAllMocks()
 })

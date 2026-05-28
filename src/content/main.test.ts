@@ -168,6 +168,57 @@ describe('content script', () => {
     })
   })
 
+  it('hides the current live page container selector and restores media', () => {
+    window.history.pushState({}, '', '/live')
+
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: false,
+        explore: false,
+        live: true,
+      },
+    })
+    document.body.innerHTML = `
+      <main id="tiktok-live-main-container-id">
+        <video></video>
+      </main>
+    `
+
+    const liveContainer = document.getElementById(
+      'tiktok-live-main-container-id',
+    )
+    const video = document.querySelector<HTMLVideoElement>('video')
+
+    expect(liveContainer).not.toBeNull()
+    expect(video).not.toBeNull()
+
+    video!.muted = false
+    video!.volume = 0.75
+
+    initContentScript()
+
+    expect(liveContainer!.style.display).toBe('none')
+    expect(liveContainer).toHaveAttribute('data-ttfb-live-hidden', 'true')
+    expect(video!.muted).toBe(true)
+    expect(video!.volume).toBe(0)
+
+    chromeMock.storage.local.set({
+      [SETTINGS_STORAGE_KEY]: {
+        active: false,
+        home: false,
+        explore: false,
+        live: false,
+      },
+    })
+
+    expect(liveContainer!.style.display).toBe('')
+    expect(liveContainer).not.toHaveAttribute('data-ttfb-live-hidden')
+    expect(video!.muted).toBe(false)
+    expect(video!.volume).toBe(0.75)
+  })
+
   it('ignores the focused page shortcut inside editable fields', () => {
     const chromeMock = getChromeMock()
     chromeMock.storage.local.seed({

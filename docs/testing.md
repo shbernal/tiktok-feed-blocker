@@ -8,6 +8,17 @@ runs Vitest once and exits with a clear pass/fail result.
 - `pnpm test` runs the full test suite once.
 - `pnpm test:watch` starts Vitest in watch mode for local development.
 - `pnpm test:coverage` runs tests with V8 coverage output in `coverage/`.
+- `pnpm e2e` builds the extension and runs deterministic Playwright extension
+  tests against local TikTok-shaped fixtures.
+- `pnpm e2e:headed` runs the fixture-based Playwright tests in headed mode.
+- `pnpm e2e:real:setup` opens a persistent Chromium profile for manual dummy
+  TikTok account authentication.
+- `pnpm e2e:real` builds the extension and runs opt-in smoke tests against the
+  real TikTok site with the persistent profile.
+- `pnpm e2e:real:open` opens TikTok in headed Chromium with the persistent
+  profile and leaves the browser open for manual inspection.
+- `pnpm e2e:real:open:extension` builds the extension, opens TikTok with the
+  same profile, and loads the unpacked extension for manual inspection.
 - `pnpm typecheck` should still be run for TypeScript validation.
 - `pnpm build` should be run when changes affect extension packaging, manifest
   behavior, popup, content script, background script, shared settings, or icons.
@@ -27,6 +38,52 @@ Vitest is configured in `vitest.config.ts`.
 This setup is intentionally lighter than end-to-end extension tests. It covers
 the extension logic quickly while leaving real browser checks for manual
 validation or future Playwright smoke tests.
+
+## Playwright E2E
+
+`playwright.config.ts` runs extension E2E tests from `e2e/specs/` against local
+fixtures. The fixtures serve TikTok URLs from deterministic HTML, so the content
+script still sees `https://www.tiktok.com/...` without depending on the real
+site or a TikTok account.
+
+Real-site smoke tests use `playwright.real.config.ts` and `e2e/real/`. These
+tests are intentionally separate from the default E2E suite because they depend
+on TikTok uptime, account state, regional UI, CAPTCHA/2FA prompts, current DOM
+structure, and a local authenticated browser profile.
+
+The full real-site workflow is documented in
+[Real TikTok E2E](./real-tiktok-e2e.md), including the standard no-extension
+login setup and the local cookie-imported profile fallback used when TikTok
+blocks headed Playwright login attempts.
+
+To prepare the authenticated profile:
+
+1. Create a dummy TikTok account for testing.
+2. Run `pnpm e2e:real:setup`.
+3. Sign in manually in the Chromium window.
+4. Complete any CAPTCHA, 2FA, cookie prompts, or region prompts.
+5. Visit `https://www.tiktok.com/` once and confirm the account is signed in.
+6. Close the Chromium tab or window.
+
+The profile is stored in `.e2e/tiktok-real-profile`, which is ignored by git.
+Set `TIKTOK_REAL_PROFILE_DIR=/absolute/or/relative/path` to use another
+profile directory. Do not commit the profile and do not put TikTok credentials
+in repo files or chat.
+
+Setup opens the profile without the extension loaded. `pnpm e2e:real` reopens
+the same profile with the built extension loaded for smoke testing.
+
+Run `pnpm e2e:real` after setup. By default it checks Home, Explore, and Live.
+Set `TIKTOK_REAL_SECTIONS=home,explore` to run only a subset when a section is
+unavailable for the test account or region. Set
+`TIKTOK_REAL_PROFILE_DIR=.e2e/tiktok-injected-profile` to use the local
+cookie-imported fallback profile.
+
+Run `pnpm e2e:real:open` when you only want to inspect TikTok manually without
+running tests. The command prints a small logged-in signal based on visible
+login buttons and session cookie names, then keeps Chromium open until the
+browser window is closed. Use `TIKTOK_REAL_OPEN_URL=https://www.tiktok.com/live`
+to open another TikTok page.
 
 ## Chrome API Mock
 

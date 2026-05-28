@@ -19,27 +19,26 @@ import {
   setStorageValue,
   waitForExtensionWorker,
 } from './extensionRuntime'
-import { installTikTokFixtureRoutes } from './tiktokPages'
+import { resolveRealTikTokProfilePath } from './realProfile'
 
-type ExtensionFixtures = {
+type RealExtensionFixtures = {
   extensionContext: BrowserContext
   extensionId: string
-  newTikTokPage: () => Promise<Page>
+  realTikTokProfilePath: string
+  newRealTikTokPage: () => Promise<Page>
   openExtensionPage: (pagePath: string) => Promise<Page>
   clearSettings: () => Promise<void>
   seedSettings: (settings: ExtensionSettings) => Promise<void>
   readSettings: () => Promise<ExtensionSettings | undefined>
 }
 
-export const test = base.extend<ExtensionFixtures>({
-  extensionContext: async ({ headless }, use, testInfo) => {
-    const userDataDir = testInfo.outputPath('chromium-profile')
+export const test = base.extend<RealExtensionFixtures>({
+  extensionContext: async ({ headless }, use) => {
     const context = await launchExtensionContext({
-      userDataDir,
+      userDataDir: resolveRealTikTokProfilePath(),
       headless,
     })
 
-    await installTikTokFixtureRoutes(context)
     await waitForExtensionWorker(context)
 
     await use(context)
@@ -50,7 +49,11 @@ export const test = base.extend<ExtensionFixtures>({
     await use(await getExtensionId(extensionContext))
   },
 
-  newTikTokPage: async ({ extensionContext }, use) => {
+  realTikTokProfilePath: async ({}, use) => {
+    await use(resolveRealTikTokProfilePath())
+  },
+
+  newRealTikTokPage: async ({ extensionContext }, use) => {
     await use(async () => extensionContext.newPage())
   },
 

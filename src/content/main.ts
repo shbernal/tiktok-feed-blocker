@@ -28,7 +28,8 @@ const SELECTORS = {
     '[class*="DivShareLayoutBase-StyledShareLayoutV2-ExploreLayout"]',
   feedNavigationContainer: '[class*="DivFeedNavigationContainer"]',
   progressElements: '[class*="progress"]',
-  livePageMainContainer: 'div[class*="ejpasz60"]',
+  livePageMainContainer:
+    ':is(#tiktok-live-main-container-id, div[class*="ejpasz60"])',
 } as const
 
 type UpdateSettingsMessage = {
