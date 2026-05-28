@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures/realExtension'
 import type { ExtensionSettings, PageSection } from '../../src/shared/settings'
+import { expectVisibleOverlayProof } from './overlayProof'
 
 type RealTikTokCase = {
   section: PageSection
@@ -67,7 +68,7 @@ test.describe('real TikTok selector smoke', () => {
       seedSettings,
       newRealTikTokPage,
       readSettings,
-    }) => {
+    }, testInfo) => {
       test.skip(
         !getRequestedSections().has(smokeCase.section),
         `Skipping ${smokeCase.section}; not listed in TIKTOK_REAL_SECTIONS.`,
@@ -88,6 +89,15 @@ test.describe('real TikTok selector smoke', () => {
       await expect(page.locator('#ttfb-active-toggle-label')).toHaveText(
         smokeCase.overlayLabel,
       )
+      await expectVisibleOverlayProof({
+        page,
+        overlay,
+        section: smokeCase.section,
+        state: 'blocked',
+        testInfo,
+        expectedText: smokeCase.overlayLabel,
+        timeout: smokeTimeout,
+      })
       await expect(hiddenTargets.first()).toBeAttached()
 
       await overlay.locator('.ttfb-slider').click()

@@ -105,6 +105,23 @@ Run the real smoke suite with the imported profile:
 TIKTOK_REAL_PROFILE_DIR=.e2e/tiktok-injected-profile pnpm e2e:real
 ```
 
+## Overlay Screenshot Proof
+
+Real TikTok overlay checks attach proof artifacts for every overlay state they
+expect to be visible. For each checked state, the test writes a full viewport
+screenshot, a cropped overlay screenshot, and a JSON proof file with the
+overlay text, class name, computed CSS, viewport size, and bounding box.
+
+These artifacts are stored under Playwright's ignored `test-results/` output
+directory and are also attached to the HTML report. They can include real
+TikTok account UI and page content, so keep them local and do not commit or
+paste sensitive screenshots.
+
+For overlay feature work, a real-site run is not complete until the relevant
+visible overlay states have screenshot proof. If a new visible overlay state is
+added, update the real smoke test to call the overlay proof helper for that
+state before treating the iteration as done.
+
 ## Manual Inspection Commands
 
 Open the default profile without loading the extension:
