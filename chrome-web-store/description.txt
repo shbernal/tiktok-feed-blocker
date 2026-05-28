@@ -1,0 +1,11 @@
+Block TikTok's most distracting surfaces and take control of your time. TikTok Feed Blocker now lets you block the Home, Explore, and Live pages individually while keeping the rest of TikTok sable. It’s built for people who want intentional access to TikTok without getting pulled into endless scrolling.
+
+Features:
+
+- Blocks TikTok Home, Explore, and Live pages
+- Turn blocking on or off for each page separately
+- One-click popup controls, plus a quick shortcut to toggle the current page
+- Mutes videos and audio in blocked sections
+- Lightweight, fast, and simple to use
+
+Regain focus and use TikTok on your terms.
