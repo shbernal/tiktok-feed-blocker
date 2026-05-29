@@ -24,7 +24,8 @@ This is a Manifest V3 Chrome extension built with Vite, React, TypeScript, and
 - `docs/` contains contributor-facing documentation for tests and extension
   internals.
 - `public/icons/` contains extension icons copied into builds.
-- `chrome-web-store/` contains store-listing screenshots.
+- `chrome-web-store/` contains store-listing copy, privacy justifications, and
+  media assets.
 - `dist/` and `release/` are generated/packaged outputs and are ignored by git.
 
 ## Commands

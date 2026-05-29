@@ -14,7 +14,8 @@ task explicitly calls for it.
 - [CI and Release Flow](./ci-release-flow.md) documents GitHub Actions
   validation and Chrome Web Store publishing.
 - [Chrome Web Store Listing](./chrome-web-store.md) documents the repository
-  copy and assets used for the public store listing.
+  copy, privacy form justifications, and assets used for the public store
+  listing.
 
 When behavior, settings shape, Chrome API usage, or the test harness changes,
 check whether these docs should be updated in the same change.
