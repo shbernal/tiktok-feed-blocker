@@ -9,7 +9,6 @@
     "types": ["node", "chrome"],
     "allowImportingTsExtensions": true,
     "strict": true,
-    "ignoreDeprecations": "6.0",
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
