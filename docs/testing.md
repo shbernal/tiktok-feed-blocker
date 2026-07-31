@@ -22,6 +22,12 @@ runs Vitest once and exits with a clear pass/fail result.
 - `pnpm typecheck` should still be run for TypeScript validation.
 - `pnpm build` should be run when changes affect extension packaging, manifest
   behavior, popup, content script, background script, shared settings, or icons.
+- `pnpm lint:firefox` builds the Firefox package and runs `web-ext lint` on it.
+  Run it when a change touches the manifest or packaging.
+- `pnpm validate:firefox` builds the Firefox package and drives it in a real
+  Firefox against real TikTok pages. Run it when a change touches the content
+  script, popup, background script, shared settings, or the manifest. See
+  [Build Targets](./build-targets.md).
 
 ## Test Environment
 
@@ -111,6 +117,29 @@ Supported mock surfaces:
 `chrome.storage.local.set(...)` updates storage and emits a `storage.onChanged`
 event, matching the behavior that popup and content-script code depends on.
 
+Every mocked surface takes a callback, including `chrome.tabs.query`. Override a
+lookup with `mockImplementation`, not `mockResolvedValue`:
+
+```ts
+chromeMock.tabs.query.mockImplementation((_queryInfo, callback) => {
+  callback([{ id: 9 } as chrome.tabs.Tab])
+})
+```
+
+## Source Convention Guards
+
+`tests/` holds checks about the source tree itself rather than about runtime
+behavior. These run in the same Vitest command and need Node APIs, so the
+directory is compiled by `tsconfig.node.json`; `tsconfig.app.json` deliberately
+limits `types` to `vite/client` and `chrome` so Node globals stay out of
+extension source.
+
+`tests/browser-api-compat.test.ts` fails if any file in `src/` awaits a
+`chrome.*` call. Gecko-based browsers expose `chrome.*` as callback-only and put
+the promise-returning variants on `browser.*`, so an awaited `chrome.*` call
+yields `undefined` there and the extension breaks silently while every Chrome
+test still passes. Keep those call sites callback-based.
+
 ## Current Coverage Map
 
 - `src/shared/settings.test.ts` covers settings defaults, normalization, legacy
@@ -123,6 +152,8 @@ event, matching the behavior that popup and content-script code depends on.
 - `src/content/main.test.ts` covers DOM hiding/restoring, managed media
   mute/restore, blocked and unblocked overlay controls, storage changes, and
   runtime messages.
+- `tests/browser-api-compat.test.ts` covers the callback-only `chrome.*` rule
+  across `src/`.
 
 ## Adding Tests
 

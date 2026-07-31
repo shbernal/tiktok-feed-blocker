@@ -49,16 +49,28 @@ function fixCrxVite8Warning(pluginOption: PluginOption): PluginOption {
   }
 }
 
+// `EXT_TARGET=firefox` builds the AMO package into `dist-firefox/`. Any other
+// value, including none, builds the Chrome package into `dist/`.
+const isFirefox = process.env.EXT_TARGET === 'firefox'
+
 export default defineConfig({
   resolve: {
     alias: {
       '@': `${path.resolve(__dirname, 'src')}`,
     },
   },
-  plugins: [react(), fixCrxVite8Warning(crx({ manifest }))],
+  plugins: [
+    react(),
+    fixCrxVite8Warning(
+      crx({ manifest, browser: isFirefox ? 'firefox' : 'chrome' }),
+    ),
+  ],
+  build: {
+    outDir: isFirefox ? 'dist-firefox' : 'dist',
+  },
   server: {
     cors: {
-      origin: [/chrome-extension:\/\//],
+      origin: isFirefox ? [/moz-extension:\/\//] : [/chrome-extension:\/\//],
     },
   },
 })
