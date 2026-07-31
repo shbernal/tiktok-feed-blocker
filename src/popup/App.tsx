@@ -55,38 +55,42 @@ function App() {
     }
   }, [])
 
-  const persistAndNotify = async (nextSettings: ExtensionSettings) => {
+  const persistAndNotify = (nextSettings: ExtensionSettings) => {
     const syncedSettings = syncActiveWithPages(nextSettings)
 
     setSettings(syncedSettings)
     chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: syncedSettings })
 
-    try {
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      })
-      if (tab?.id !== undefined) {
-        const message: UpdateSettingsMessage = {
-          action: 'updateSettings',
-          settings: syncedSettings,
-        }
-        chrome.tabs.sendMessage(tab.id, message, () => {
-          // Ignore expected errors (e.g., active tab has no injected content script).
-          void chrome.runtime.lastError
-        })
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (chrome.runtime.lastError) {
+        console.debug(
+          'Could not find the active tab:',
+          chrome.runtime.lastError.message,
+        )
+        return
       }
-    } catch (error) {
-      console.debug('Could not send message to content script:', error)
-    }
+
+      if (tab?.id === undefined) {
+        return
+      }
+
+      const message: UpdateSettingsMessage = {
+        action: 'updateSettings',
+        settings: syncedSettings,
+      }
+      chrome.tabs.sendMessage(tab.id, message, () => {
+        // Ignore expected errors (e.g., active tab has no injected content script).
+        void chrome.runtime.lastError
+      })
+    })
   }
 
   const toggleAllPages = () => {
-    void persistAndNotify(setAllPages(settings, !isAllPagesActive(settings)))
+    persistAndNotify(setAllPages(settings, !isAllPagesActive(settings)))
   }
 
   const toggleSection = (section: PageSection) => {
-    void persistAndNotify(
+    persistAndNotify(
       syncActiveWithPages({
         ...settings,
         [section]: !settings[section],

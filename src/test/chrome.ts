@@ -109,9 +109,14 @@ export const createChromeMock = () => {
       onChanged: storageChanged,
     },
     tabs: {
-      query: vi.fn(async (_queryInfo: chrome.tabs.QueryInfo) => {
-        return [] as chrome.tabs.Tab[]
-      }),
+      query: vi.fn(
+        (
+          _queryInfo: chrome.tabs.QueryInfo,
+          callback: (tabs: chrome.tabs.Tab[]) => void,
+        ) => {
+          callback([])
+        },
+      ),
       sendMessage: vi.fn(
         (
           _tabId: number,

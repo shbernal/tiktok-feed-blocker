@@ -6,21 +6,22 @@ type ToggleCurrentPageBlockMessage = {
   action: 'toggleCurrentPageBlock'
 }
 
-chrome.commands.onCommand.addListener(async command => {
+chrome.commands.onCommand.addListener(command => {
   if (command !== TOGGLE_CURRENT_PAGE_COMMAND) {
     return
   }
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  if (tab?.id === undefined || !isTikTokUrl(tab.url)) {
-    return
-  }
+  chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+    if (tab?.id === undefined || !isTikTokUrl(tab.url)) {
+      return
+    }
 
-  const message: ToggleCurrentPageBlockMessage = {
-    action: 'toggleCurrentPageBlock',
-  }
+    const message: ToggleCurrentPageBlockMessage = {
+      action: 'toggleCurrentPageBlock',
+    }
 
-  chrome.tabs.sendMessage(tab.id, message, () => {
-    void chrome.runtime.lastError
+    chrome.tabs.sendMessage(tab.id, message, () => {
+      void chrome.runtime.lastError
+    })
   })
 })

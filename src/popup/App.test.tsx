@@ -46,11 +46,13 @@ describe('popup app', () => {
         live: true,
       },
     })
-    chromeMock.tabs.query.mockResolvedValue([
-      {
-        id: 9,
-      } as chrome.tabs.Tab,
-    ])
+    chromeMock.tabs.query.mockImplementation((_queryInfo, callback) => {
+      callback([
+        {
+          id: 9,
+        } as chrome.tabs.Tab,
+      ])
+    })
 
     render(<App />)
 
@@ -93,11 +95,13 @@ describe('popup app', () => {
         live: false,
       },
     })
-    chromeMock.tabs.query.mockResolvedValue([
-      {
-        id: 12,
-      } as chrome.tabs.Tab,
-    ])
+    chromeMock.tabs.query.mockImplementation((_queryInfo, callback) => {
+      callback([
+        {
+          id: 12,
+        } as chrome.tabs.Tab,
+      ])
+    })
 
     render(<App />)
 

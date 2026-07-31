@@ -13,22 +13,27 @@ describe('background command handling', () => {
 
   it('sends a toggle message to the active TikTok tab', async () => {
     const chromeMock = getChromeMock()
-    chromeMock.tabs.query.mockResolvedValue([
-      {
-        id: 42,
-        url: 'https://www.tiktok.com/@creator/video/123',
-      } as chrome.tabs.Tab,
-    ])
+    chromeMock.tabs.query.mockImplementation((_queryInfo, callback) => {
+      callback([
+        {
+          id: 42,
+          url: 'https://www.tiktok.com/@creator/video/123',
+        } as chrome.tabs.Tab,
+      ])
+    })
 
     await loadBackgroundScript()
 
     const [listener] = chromeMock.commands.onCommand.listeners()
     await listener?.('toggle-current-page-block')
 
-    expect(chromeMock.tabs.query).toHaveBeenCalledWith({
-      active: true,
-      currentWindow: true,
-    })
+    expect(chromeMock.tabs.query).toHaveBeenCalledWith(
+      {
+        active: true,
+        currentWindow: true,
+      },
+      expect.any(Function),
+    )
     expect(chromeMock.tabs.sendMessage).toHaveBeenCalledWith(
       42,
       {
@@ -52,12 +57,14 @@ describe('background command handling', () => {
 
   it('does not message non-TikTok tabs', async () => {
     const chromeMock = getChromeMock()
-    chromeMock.tabs.query.mockResolvedValue([
-      {
-        id: 42,
-        url: 'https://example.com/',
-      } as chrome.tabs.Tab,
-    ])
+    chromeMock.tabs.query.mockImplementation((_queryInfo, callback) => {
+      callback([
+        {
+          id: 42,
+          url: 'https://example.com/',
+        } as chrome.tabs.Tab,
+      ])
+    })
 
     await loadBackgroundScript()
 
