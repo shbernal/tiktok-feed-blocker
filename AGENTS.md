@@ -6,11 +6,14 @@ Do not modify `README.md` unless told explicitly to do so.
 
 ## Project Shape
 
-This is a Manifest V3 Chrome extension built with Vite, React, TypeScript, and
-`@crxjs/vite-plugin`.
+This is a Manifest V3 browser extension built with Vite, React, TypeScript, and
+`@crxjs/vite-plugin`. It ships to the Chrome Web Store and to
+addons.mozilla.org, and the same source tree builds both packages.
 
-- `manifest.config.ts` defines the extension manifest and reads the version from
-  `package.json`.
+- `manifest.config.ts` defines the extension manifest, reads the version from
+  `package.json`, and selects the build target from `EXT_TARGET`. Chrome is the
+  default and builds to `dist/`; `EXT_TARGET=firefox` builds to `dist-firefox/`.
+  Only manifest keys differ between the two.
 - `src/background/main.ts` handles the browser command that toggles blocking for
   the active TikTok tab.
 - `src/content/main.ts` runs on TikTok pages, hides page sections, mutes media,
@@ -26,14 +29,25 @@ This is a Manifest V3 Chrome extension built with Vite, React, TypeScript, and
 - `public/icons/` contains extension icons copied into builds.
 - `chrome-web-store/` contains store-listing copy, privacy justifications, and
   media assets.
-- `dist/` and `release/` are generated/packaged outputs and are ignored by git.
+- `amo/` contains the addons.mozilla.org listing copy, metadata, data-collection
+  answer, and reviewer build instructions.
+- `scripts/` contains the packaging and publishing scripts run by CI.
+- `tests/` contains source-convention guards that run in the same Vitest command
+  as the unit tests.
+- `dist/`, `dist-firefox/`, and `release/` are generated/packaged outputs and are
+  ignored by git.
 
 ## Commands
 
 Use `pnpm`.
 
-- `pnpm build` - run TypeScript project build and create the extension build in
-  `dist/`.
+- `pnpm build` - run TypeScript project build and create the Chrome extension
+  build in `dist/`.
+- `pnpm build:firefox` - build the Firefox target in `dist-firefox/`.
+- `pnpm lint:firefox` - build the Firefox target and check it with
+  `web-ext lint`. Zero errors is the bar; a few warnings are expected.
+- `pnpm validate:firefox` - drive the built Firefox package in a real Firefox
+  against real TikTok pages.
 - `pnpm typecheck` - run TypeScript checks only.
 - `pnpm test` - run the Vitest suite once.
 - `pnpm test:watch` - run Vitest in watch mode.
@@ -44,7 +58,10 @@ Use `pnpm`.
 
 For code changes, run at least `pnpm typecheck` and `pnpm test`; run
 `pnpm build` when touching manifest, content script, background script, popup,
-shared settings, icons, or packaging behavior.
+shared settings, icons, or packaging behavior. Also run `pnpm lint:firefox` when
+touching the manifest or packaging — Gecko rejects manifest keys Chrome accepts,
+so the Firefox target can break on a change that leaves the Chrome build
+healthy.
 
 ## Coding Guidelines
 
@@ -66,8 +83,11 @@ shared settings, icons, or packaging behavior.
 - Preserve user media state when muting. If adding new media-blocking behavior,
   store previous muted/volume/paused state before mutating and restore it when
   blocking is disabled.
-- For Chrome APIs, prefer the existing callback-compatible patterns unless a
-  surrounding file already uses promises safely for that API.
+- Never `await` a `chrome.*` call in `src/`. This is a Firefox requirement, not
+  a preference: Gecko exposes `chrome.*` as callback-only and puts the
+  promise-returning variants on `browser.*`, so an awaited call resolves to
+  `undefined` there while every Chrome test still passes.
+  `tests/browser-api-compat.test.ts` enforces this.
 - Keep popup UI compact. The popup is fixed around a 320px width; avoid adding
   verbose explanatory text inside the extension UI.
 
@@ -84,17 +104,23 @@ shared settings, icons, or packaging behavior.
 
 ## Generated And Release Files
 
-- Do not hand-edit `dist/`; update source/config and rebuild instead.
+- Do not hand-edit `dist/` or `dist-firefox/`; update source/config and rebuild
+  instead.
 - Do not create or replace files in `release/` unless doing explicit release
   packaging.
-- Do not change `chrome-web-store/` assets unless the task is about listing
-  screenshots or store metadata.
+- Do not change `chrome-web-store/` or `amo/` assets unless the task is about
+  listing screenshots or store metadata. `amo/description.txt` and
+  `chrome-web-store/description.txt` describe the same product; change them
+  together.
+- Do not change `browser_specific_settings.gecko.id`. AMO binds the listing and
+  every installed user's update path to it, so a new id is a new add-on.
 - Do not bump `package.json` version unless explicitly requested.
 
 ## Manual Validation Notes
 
 After a build, load `dist/` as an unpacked extension in Chrome or a Chromium
-browser when behavior needs runtime validation. Check at least:
+browser when behavior needs runtime validation. `pnpm validate:firefox` covers
+the same list automatically on the Firefox side. Check at least:
 
 - popup toggles persist via `chrome.storage.local`;
 - Home, Explore, and Live settings can be toggled independently;

@@ -38,3 +38,9 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # Builds the Firefox target and runs web-ext lint over it. Gecko rejects
+      # manifest keys Chrome accepts, so without this the second target can
+      # break on a change that leaves the Chrome build perfectly healthy.
+      - name: Lint Firefox package
+        run: pnpm lint:firefox

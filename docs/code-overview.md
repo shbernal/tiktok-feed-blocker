@@ -6,9 +6,14 @@ settings and Chrome APIs.
 ## Manifest
 
 `manifest.config.ts` defines the Manifest V3 extension metadata. It reads the
-extension version from `package.json`, registers the background service worker,
-the TikTok content script, the popup entry point, storage permissions, active-tab
+extension version from `package.json`, registers the background entry point, the
+TikTok content script, the popup entry point, storage permissions, active-tab
 permission, TikTok host permissions, command shortcut, and icons.
+
+A few manifest keys differ per build target, including the background entry:
+Chrome gets a service worker and Firefox gets an event page. See
+[Build Targets](./build-targets.md). Keep target-conditional keys to the minimum
+the other browser actually needs.
 
 When manifest behavior changes, run `pnpm build` and inspect the generated
 `dist/manifest.json` if the exact packaged output matters.
@@ -98,3 +103,7 @@ The popup and content script both write settings. The shared settings helpers
 are the source of truth for keeping `active` aligned with page-section toggles.
 The background script does not mutate settings directly; it sends a command to
 the content script, which toggles the currently detected page section.
+
+Every `chrome.*` call in `src/` is callback-based and none may be awaited. That
+is a Firefox requirement, not a style preference; see
+[Firefox and AMO](./firefox-amo.md).
