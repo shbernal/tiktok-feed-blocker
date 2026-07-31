@@ -293,9 +293,10 @@ const main = async () => {
   const version = await attachSource(addon.version.id)
 
   // A listed submission is queued for human review; it does not go live the way
-  // a Chrome Web Store publish does. `nominated` on a first submission and
-  // `awaiting review` on the file are the expected successful outcomes, so the
-  // job must not wait for `public` or it will fail every release.
+  // a Chrome Web Store publish does. A file status of `unreviewed` and an
+  // add-on status of `nominated` until the first approval are the expected
+  // successful outcomes, so the job must not wait for `public` or it will fail
+  // every release.
   console.log(
     [
       '',

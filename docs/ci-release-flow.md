@@ -85,9 +85,10 @@ Every request mints its own JWT. AMO caps a token's lifetime at five minutes
 past issue, which is shorter than validation polling can run.
 
 A listed AMO version is queued for human review and does not go live on
-submission. The successful outcome is an add-on status of `nominated` on a first
-submission, or a file status of `awaiting review` on later versions. The workflow
-treats those as success; waiting for `public` would fail every release.
+submission. The successful outcome is a file status of `unreviewed`, which the
+developer dashboard displays as "Awaiting Review", plus an add-on status of
+`nominated` until the first version is approved. The workflow treats those as
+success; waiting for `public` would fail every release.
 
 ## GitHub Configuration
 
@@ -228,13 +229,18 @@ pnpm package:firefox
 pnpm publish:amo --validate-only
 ```
 
-Check the public AMO state of the add-on. This needs no authentication:
+Check the public AMO state of the add-on:
 
 ```sh
 curl -s \
   "https://addons.mozilla.org/api/v5/addons/addon/tiktok-feed-blocker@shbernal.github.io/" |
   jq '{status, version: .current_version.version}'
 ```
+
+This endpoint only serves public add-ons. It needs no authentication once the
+add-on is approved, but it returns `401` before then, so a `401` while the first
+version is still in review means "not yet public", not "credentials missing".
+Use `pnpm publish:amo --check` to test credentials.
 
 ## Security Notes
 
