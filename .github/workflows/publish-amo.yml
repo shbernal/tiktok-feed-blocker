@@ -1,0 +1,89 @@
+name: Publish addons.mozilla.org
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: addons-mozilla-org
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.3.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm format
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Verify release tag matches package version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF_NAME#v}"
+
+          if [ "$version" != "$tag" ]; then
+            echo "package.json version $version does not match tag $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      # HEAD is the release tag here, so archiving HEAD archives the tag. Run it
+      # before the build so the archive cannot pick up build output.
+      - name: Package source
+        run: pnpm package:source
+
+      - name: Build and package Firefox extension
+        run: pnpm package:firefox
+
+      - name: Lint Firefox package
+        run: pnpm exec web-ext lint --source-dir dist-firefox
+
+      - name: Record package paths
+        run: |
+          version="$(node -p "require('./package.json').version")"
+
+          {
+            echo "PACKAGE_ZIP=release/tiktok-feed-blocker-firefox-${version}.zip"
+            echo "SOURCE_ZIP=release/tiktok-feed-blocker-source-${version}.zip"
+          } >> "$GITHUB_ENV"
+
+      # Uploads the package, waits for AMO validation, creates the version with
+      # the reviewer notes, and attaches the source archive AMO requires for
+      # bundler-built add-ons. A listed version is queued for human review, so
+      # the step succeeds on "awaiting review" and never waits for "public".
+      - name: Submit to addons.mozilla.org
+        env:
+          MOZILLA_ADDON_JWT_ISSUER: ${{ secrets.MOZILLA_ADDON_JWT_ISSUER }}
+          MOZILLA_ADDON_JWT_SECRET: ${{ secrets.MOZILLA_ADDON_JWT_SECRET }}
+        run: pnpm publish:amo
+
+      - name: Attach packages to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            "$PACKAGE_ZIP" "$SOURCE_ZIP" --clobber

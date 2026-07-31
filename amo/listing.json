@@ -1,0 +1,17 @@
+{
+  "slug": "tiktok-feed-blocker",
+  "default_locale": "en-US",
+  "summary": {
+    "en-US": "Block TikTok's Home, Explore, and Live pages individually and mute their media. Toggle each page from the popup, an in-page switch, or a keyboard shortcut. Nothing leaves your device."
+  },
+  "categories": ["social-communication"],
+  "tags": ["content blocker", "social media"],
+  "homepage": {
+    "en-US": "https://github.com/shbernal/tiktok-feed-blocker"
+  },
+  "support_url": {
+    "en-US": "https://github.com/shbernal/tiktok-feed-blocker/issues"
+  },
+  "is_experimental": false,
+  "requires_payment": false
+}
