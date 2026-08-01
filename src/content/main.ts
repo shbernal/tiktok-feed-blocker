@@ -633,7 +633,11 @@ const renderFeedOverlay = () => {
         <div class="ttfb-toggle-row">
           <p id="${OVERLAY_TOGGLE_LABEL_ID}" class="ttfb-toggle-label"></p>
           <label class="ttfb-switch">
-            <input id="${OVERLAY_TOGGLE_ID}" type="checkbox" />
+            <input
+              id="${OVERLAY_TOGGLE_ID}"
+              type="checkbox"
+              aria-labelledby="${OVERLAY_TOGGLE_LABEL_ID}"
+            />
             <span class="ttfb-slider"></span>
           </label>
         </div>

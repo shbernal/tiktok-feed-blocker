@@ -1,4 +1,4 @@
-import { fireEvent } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SETTINGS_STORAGE_KEY } from '../shared/settings'
 import { TOGGLE_SHORTCUT_STORAGE_KEY } from '../shared/shortcut'
@@ -162,6 +162,35 @@ describe('content script', () => {
     expect(availableOverlay).not.toBeNull()
     expect(availableOverlay).toHaveClass('ttfb-overlay-available')
     expect(blockButton).toHaveTextContent('Block Explore')
+  })
+
+  it('gives the overlay controls an accessible name in both states', () => {
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: false,
+        explore: true,
+        live: false,
+      },
+    })
+    document.body.innerHTML = '<main id="main-content-explore_page"></main>'
+
+    initContentScript()
+
+    // The input's own label element wraps only the slider span, so the name
+    // has to come from the sibling paragraph via aria-labelledby.
+    const toggle = screen.getByRole('checkbox', { name: 'Block Explore' })
+    expect(toggle).toHaveAttribute('id', OVERLAY_TOGGLE_ID)
+
+    // Flipping to the available state swaps in the block button, which names
+    // itself with aria-label.
+    ;(toggle as HTMLInputElement).checked = false
+    fireEvent.change(toggle)
+
+    expect(
+      screen.getByRole('button', { name: 'Block Explore' }),
+    ).toHaveAttribute('id', OVERLAY_BLOCK_BUTTON_ID)
   })
 
   it('renders a top-right corner overlay for an unblocked page and persists the block action', () => {
