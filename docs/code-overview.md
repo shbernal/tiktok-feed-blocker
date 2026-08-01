@@ -117,7 +117,8 @@ is split across `src/content/`:
 | Module              | Responsibility                                                                         |
 | ------------------- | -------------------------------------------------------------------------------------- |
 | `selectors.ts`      | TikTok selectors, Home/Explore/Live detection, page-section labels                     |
-| `blockingStyles.ts` | the blocking stylesheet and the root attributes that gate it                           |
+| `blockingStyles.ts` | the blocking stylesheet, the root attributes that gate it, and the ready gate          |
+| `blocking.css`      | generated from `blockingStyles.ts`; the copy the manifest injects at `document_start`  |
 | `media.ts`          | saving and restoring previous muted, volume, and paused state                          |
 | `overlay.ts`        | overlay element ids, the injected stylesheet, render and removal                       |
 | `blocking.ts`       | per-section apply and clear, and `applyCurrentSettings`                                |
@@ -183,6 +184,52 @@ The one failure mode the stylesheet cannot defend against is TikTok setting
 `!important` rule. It has not been observed, and it fails silently, so it is the
 first thing to check if a section ever stops hiding.
 
+### The Ready Gate And `document_start`
+
+Blocking has to be in place before TikTok paints, so the manifest declares a
+`css` entry alongside the content script and both run at `document_start`. The
+stylesheet hides every blockable target while `<html>` lacks `data-ttfb-ready`:
+
+```css
+html:not([data-ttfb-ready]) #column-list-container {
+  display: none !important;
+}
+```
+
+`main.ts` sets that attribute in the storage callback, together with the section
+attributes, so the page is revealed already in its correct state. Until then
+everything blockable stays hidden — including for users who block nothing, who
+get a blank bounded by the storage read instead of a flash of feed. For a
+blocker that is the safer direction.
+
+Three things about the gate are easy to get wrong:
+
+- **The `css` entry is load-bearing, not a duplicate of the runtime sheet.**
+  crxjs wraps the content script in an async `import()`, so `js` at
+  `document_start` still executes after that loader resolves. Only the manifest
+  stylesheet is guaranteed to be in place before the document parses.
+- **The gate is one-way.** An unset attribute hides the page, so `clearAllBlocking`
+  sets it rather than clearing it. Removing the runtime sheet does not remove the
+  one the manifest injected, so a teardown that cleared the attribute would leave
+  the page permanently blank.
+- **Init cannot wait for `DOMContentLoaded`,** which is the state `document_start`
+  runs in. The storage read, the root attributes and the listeners are
+  body-independent and run immediately; only the observer, the interval and the
+  overlay wait for a body via `whenBodyAvailable`. A 1500ms fallback timer, armed
+  before the storage call so it survives a throwing or never-returning `get`,
+  opens the gate regardless.
+
+`src/content/blocking.css` is generated from `blockingStyles.ts` and checked
+byte-for-byte by `tests/blocking-css.test.ts`, so a selector change cannot leave
+the `document_start` sheet blocking the old set. After editing `selectors.ts` or
+`HIDDEN_SELECTORS`, regenerate it:
+
+```bash
+UPDATE_BLOCKING_CSS=1 pnpm test blocking-css
+```
+
+It is listed in `.prettierignore` because that guard compares exact bytes.
+
 Media changes should remain idempotent. Clear/restore paths need to undo every
 media mutation the apply paths introduced, and restore looks media up by its
 `data-ttfb-previous-muted` attribute rather than by container, so teardown still
@@ -198,7 +245,35 @@ for the selectors each section depends on lives in
 Teardown has to cancel deferred work too, not just detach listeners. The
 observer defers the re-apply by 100ms; `cleanupContentScript` clears the pending
 timer, because one firing after teardown would re-apply blocking to elements
-`clearAllBlocking` had just restored.
+`clearAllBlocking` had just restored. It also clears the ready-gate fallback
+timer and any pending `DOMContentLoaded` handler for the same reason.
+
+### What The Two Sweep Drivers Cost
+
+Measured on real TikTok Home, 30s of scrolling per state, extension loaded:
+
+| State          | Observer callbacks | Coalesced sweeps | Sweep query cost |
+| -------------- | ------------------ | ---------------- | ---------------- |
+| Home blocked   | 0.1/s              | 0.03/s           | p95 0.2ms        |
+| Home unblocked | 1.9/s              | 1.2/s            | p95 0.3ms        |
+
+Two things follow, and both argue for leaving the drivers alone:
+
+- **There is no churn problem.** The coalescing flag caps observer-driven sweeps
+  at one per 100ms, and the real rate never approaches that ceiling. At ~1.2
+  sweeps per second costing ~0.3ms each, the sweeps are far too cheap to be
+  worth optimising. A blocked feed is nearly inert, because a hidden container
+  does not lazy-load.
+- **The 1s interval earns its place.** The unblocked run saw 26 media elements
+  go from muted to unmuted in place over 30s — no DOM insertion, so nothing the
+  observer can see. That is exactly the event the interval exists to catch, and
+  slowing it to 5-10s would mean that many seconds of audible audio from a
+  blocked feed.
+
+The blocked run recorded zero in-place unmutes, but that number cannot be read
+as "it never happens": the probe sampled at 1Hz alongside the extension's own 1s
+interval, so it cannot distinguish "never occurred" from "already re-muted
+before the next sample". The unblocked figure is the trustworthy one.
 
 Only one deferred re-apply is ever queued. A scrolling feed fires observer
 callbacks continuously and every sweep is a full-document pass, so mutations

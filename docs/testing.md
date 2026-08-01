@@ -151,6 +151,20 @@ the promise-returning variants on `browser.*`, so an awaited `chrome.*` call
 yields `undefined` there and the extension breaks silently while every Chrome
 test still passes. Keep those call sites callback-based.
 
+`tests/blocking-css.test.ts` fails if `src/content/blocking.css` has drifted
+from the stylesheet `blockingStyles.ts` builds. The manifest injects that file
+at `document_start`, so the selector list exists both in the TypeScript table
+and in a static file the build does not derive; without the guard, adding or
+removing a selector would silently leave the `document_start` sheet blocking the
+old set. Regenerate after any selector change:
+
+```bash
+UPDATE_BLOCKING_CSS=1 pnpm test blocking-css
+```
+
+The file is in `.prettierignore`, because the guard compares exact bytes.
+Importing the builder is also why `tsconfig.node.json` includes the `DOM` lib.
+
 ## Current Coverage Map
 
 - `src/shared/settings.test.ts` covers settings defaults, normalization, legacy
@@ -166,8 +180,14 @@ test still passes. Keep those call sites callback-based.
 - `src/content/main.test.ts` also pins the property that motivated CSS-based
   hiding: a burst of inserted elements is already `display: none` before the
   deferred sweep runs.
+- `src/content/main.test.ts` covers the `document_start` ready gate: targets
+  stay hidden until the storage read lands, the fallback timer opens the gate if
+  it never does, init survives having no `<body>` and picks up the observer once
+  one exists, and teardown leaves the page visible rather than blank.
 - `tests/browser-api-compat.test.ts` covers the callback-only `chrome.*` rule
   across `src/`.
+- `tests/blocking-css.test.ts` covers the generated `document_start` stylesheet
+  against the selector table.
 
 ## Adding Tests
 
