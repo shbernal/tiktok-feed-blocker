@@ -46,10 +46,17 @@ const homePage = pageShell(
   `
     <nav class="DivFeedNavigationContainer-fixture">Home navigation</nav>
     <div class="progress-js-inner">Primary progress</div>
-    <div class="progress-fixture">Secondary progress</div>
     <main id="column-list-container">
       <h1>Home feed fixture</h1>
       <video id="home-video"></video>
+      <!-- Real TikTok renders the seek bar inside the feed container with a
+           capital-P hashed class, so hiding the container covers it. -->
+      <div
+        id="home-video-progress"
+        class="css-9p2al5-7937d88b--DivVideoProgressContainer eer0cdn0"
+      >
+        Video progress
+      </div>
     </main>
     <aside class="AsideOneColumnSidebar-fixture">
       <div class="DivCommentSidebarTransitionWrapper-fixture">

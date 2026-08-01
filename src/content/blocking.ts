@@ -24,7 +24,6 @@ export const clearHomeBlocking = () => {
   showElements(SELECTORS.progressIndicator, HIDDEN_HOME_ATTR)
   showElements(SELECTORS.homeCommentSidebar, HIDDEN_HOME_ATTR)
   showElements(SELECTORS.feedNavigationContainer, HIDDEN_HOME_ATTR)
-  showElements(SELECTORS.progressElements, HIDDEN_HOME_ATTR)
 }
 
 export const clearExploreBlocking = () => {
@@ -54,7 +53,6 @@ export const applyHomeBlocking = () => {
   }
 
   hideElements(SELECTORS.feedNavigationContainer, HIDDEN_HOME_ATTR)
-  hideElements(SELECTORS.progressElements, HIDDEN_HOME_ATTR)
   hideElements(SELECTORS.homeCommentSidebar, HIDDEN_HOME_ATTR)
 }
 

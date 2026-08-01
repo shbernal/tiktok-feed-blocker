@@ -57,8 +57,11 @@ test('blocks and restores Home targets', async ({
 
   const homeTarget = page.locator('#column-list-container')
   const homeCommentSidebar = page.locator('#home-comment-sidebar')
+  // The seek bar is never targeted directly; it goes away with its container.
+  const homeVideoProgress = page.locator('#home-video-progress')
   await expect(homeTarget).toHaveCSS('display', 'none')
   await expect(homeTarget).toHaveAttribute('data-ttfb-home-hidden', 'true')
+  await expect(homeVideoProgress).toBeHidden()
   await expect(homeCommentSidebar).toHaveCSS('display', 'none')
   await expect(homeCommentSidebar).toHaveAttribute(
     'data-ttfb-home-hidden',
@@ -75,6 +78,7 @@ test('blocks and restores Home targets', async ({
   const blockButton = await expectAvailableOverlay(page, 'Block Home')
   await expect(homeTarget).toHaveCSS('display', 'block')
   await expect(homeTarget).not.toHaveAttribute('data-ttfb-home-hidden', 'true')
+  await expect(homeVideoProgress).toBeVisible()
   await expect(homeCommentSidebar).toHaveCSS('display', 'block')
   await expect(homeCommentSidebar).not.toHaveAttribute(
     'data-ttfb-home-hidden',
@@ -92,6 +96,7 @@ test('blocks and restores Home targets', async ({
 
   await expect(homeTarget).toHaveCSS('display', 'none')
   await expect(homeTarget).toHaveAttribute('data-ttfb-home-hidden', 'true')
+  await expect(homeVideoProgress).toBeHidden()
   await expect(homeCommentSidebar).toHaveCSS('display', 'none')
   await expect(homeCommentSidebar).toHaveAttribute(
     'data-ttfb-home-hidden',

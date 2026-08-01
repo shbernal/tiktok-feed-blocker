@@ -17,7 +17,6 @@ export const SELECTORS = {
   exploreLayout:
     '[class*="DivShareLayoutBase-StyledShareLayoutV2-ExploreLayout"]',
   feedNavigationContainer: '[class*="DivFeedNavigationContainer"]',
-  progressElements: '[class*="progress"]',
   livePageMainContainer:
     ':is(#tiktok-live-main-container-id, div[class*="ejpasz60"])',
 } as const
@@ -28,8 +27,7 @@ export const hasHomeTargets = () => {
   return (
     document.querySelector(SELECTORS.columnListContainer) !== null ||
     document.querySelector(SELECTORS.progressIndicator) !== null ||
-    document.querySelectorAll(SELECTORS.feedNavigationContainer).length > 0 ||
-    document.querySelectorAll(SELECTORS.progressElements).length > 0
+    document.querySelectorAll(SELECTORS.feedNavigationContainer).length > 0
   )
 }
 
