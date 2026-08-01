@@ -32,7 +32,15 @@ export default defineManifest({
     {
       matches: ['*://*.tiktok.com/*'],
       js: ['src/content/main.ts'],
-      run_at: 'document_end',
+      // The stylesheet is the only half that can be guaranteed to land before
+      // the document parses: crxjs wraps the content script in an async
+      // `import()`, so `js` at `document_start` still executes after the loader
+      // resolves. Its rules hide every blockable target until the script sets
+      // `data-ttfb-ready`, which is what removes the flash of feed content.
+      // Generated from `src/content/blockingStyles.ts`; see
+      // `tests/blocking-css.test.ts`.
+      css: ['src/content/blocking.css'],
+      run_at: 'document_start',
     },
   ],
   action: {

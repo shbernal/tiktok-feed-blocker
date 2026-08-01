@@ -1,0 +1,29 @@
+/*
+ * GENERATED FILE - do not edit by hand.
+ * Source of truth: src/content/blockingStyles.ts (buildBlockingStyleSheet).
+ * Regenerate: UPDATE_BLOCKING_CSS=1 pnpm test blocking-css
+ */
+
+html:not([data-ttfb-ready]) #column-list-container,
+html:not([data-ttfb-ready]) .progress-js-inner,
+html:not([data-ttfb-ready]) :is([class*="DivCommentSidebarTransitionWrapper"], section[class*="SectionCommentSidebarContainer"]),
+html:not([data-ttfb-ready]) [class*="DivFeedNavigationContainer"],
+html:not([data-ttfb-ready]) #main-content-explore_page,
+html:not([data-ttfb-ready]) #tiktok-live-main-container-id {
+  display: none !important;
+}
+
+html[data-ttfb-home-blocked] #column-list-container,
+html[data-ttfb-home-blocked] .progress-js-inner,
+html[data-ttfb-home-blocked] :is([class*="DivCommentSidebarTransitionWrapper"], section[class*="SectionCommentSidebarContainer"]),
+html[data-ttfb-home-blocked] [class*="DivFeedNavigationContainer"] {
+  display: none !important;
+}
+
+html[data-ttfb-explore-blocked] #main-content-explore_page {
+  display: none !important;
+}
+
+html[data-ttfb-live-blocked] #tiktok-live-main-container-id {
+  display: none !important;
+}

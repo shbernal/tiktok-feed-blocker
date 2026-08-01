@@ -2,3 +2,6 @@ dist/
 node_modules/
 pnpm-lock.yaml
 README.md
+# Generated from src/content/blockingStyles.ts and checked byte-for-byte by
+# tests/blocking-css.test.ts. Reformatting it here would fail that guard.
+src/content/blocking.css

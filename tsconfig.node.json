@@ -2,7 +2,11 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "target": "ES2022",
-    "lib": ["ES2023"],
+    // DOM is here for `tests/blocking-css.test.ts`, which imports the content
+    // script's stylesheet builder to check the generated CSS has not drifted.
+    // That module sits alongside DOM helpers in `blockingStyles.ts`; separating
+    // them would mean splitting the selector table out of `selectors.ts` too.
+    "lib": ["ES2023", "DOM"],
     "moduleDetection": "force",
     "module": "ESNext",
     "moduleResolution": "bundler",

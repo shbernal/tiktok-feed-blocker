@@ -7,6 +7,7 @@ import {
   clearAllSectionAttributes,
   ensureBlockingStyles,
   removeBlockingStyles,
+  setDocumentReady,
   setSectionBlocked,
 } from './blockingStyles'
 import {
@@ -71,10 +72,16 @@ const applySectionBlocking = (
 // and the stylesheet gone. Restoring by attribute rather than by container
 // matters here, because teardown can run after TikTok has already replaced the
 // container the media was muted through.
+//
+// `setDocumentReady` is part of the undo, not a leftover. Removing the runtime
+// sheet does not remove the one the manifest injected at `document_start`, and
+// its rules hide every target while the root lacks the ready attribute — so a
+// teardown that cleared it would leave the page permanently blank.
 export const clearAllBlocking = () => {
   clearAllSectionAttributes()
   restoreAllManagedMedia()
   removeBlockingStyles()
+  setDocumentReady()
 }
 
 export const applyCurrentSettings = (

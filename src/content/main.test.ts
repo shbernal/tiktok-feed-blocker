@@ -20,6 +20,13 @@ const teardownBlocking = () => {
   clearAllBlocking()
 }
 
+// `clearAllBlocking` sets `data-ttfb-ready` on purpose, and the shared teardown
+// only resets `document.body`. Each test needs the attribute back in its
+// pre-script state, which is what a real page load starts from.
+const resetDocumentRoot = () => {
+  document.documentElement.removeAttribute('data-ttfb-ready')
+}
+
 const displayOf = (element: Element | null) => {
   return element === null ? null : window.getComputedStyle(element).display
 }
@@ -31,6 +38,7 @@ const blockedAttributeFor = (section: 'home' | 'explore' | 'live') => {
 describe('content script', () => {
   afterEach(() => {
     teardownBlocking()
+    resetDocumentRoot()
   })
 
   it('hides home targets, mutes managed media, and restores them when disabled', () => {
@@ -548,5 +556,144 @@ describe('content script', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  // The `document_start` half. The stylesheet the manifest injects hides every
+  // blockable target while the root lacks `data-ttfb-ready`, so nothing the
+  // user asked to block can paint before the settings are known. These cover
+  // the three states that gate holds open, and the one that must never persist.
+  describe('before the stored settings resolve', () => {
+    // Hands back the storage callback instead of running it, so the test can
+    // observe the window the real extension spends waiting on storage.
+    const deferStorageRead = () => {
+      const chromeMock = getChromeMock()
+      let resolveRead: (() => void) | null = null
+
+      chromeMock.storage.local.get.mockImplementation(
+        (keys: unknown, callback: (items: Record<string, unknown>) => void) => {
+          resolveRead = () => {
+            const values = chromeMock.storage.local.snapshot()
+            const requested = Array.isArray(keys) ? keys : [String(keys)]
+            callback(
+              Object.fromEntries(requested.map(key => [key, values[key]])),
+            )
+          }
+        },
+      )
+
+      return () => resolveRead?.()
+    }
+
+    it('hides blockable targets until the read lands, then reveals them', () => {
+      const chromeMock = getChromeMock()
+      chromeMock.storage.local.seed({
+        [SETTINGS_STORAGE_KEY]: {
+          active: false,
+          home: false,
+          explore: false,
+          live: false,
+          overlay: true,
+        },
+      })
+      document.body.innerHTML = '<div id="column-list-container"></div>'
+
+      const columnList = document.querySelector<HTMLElement>(
+        '#column-list-container',
+      )
+      const resolveRead = deferStorageRead()
+
+      initContentScript()
+
+      // Blocking is off in storage, but that is not known yet. Hiding first and
+      // asking afterwards is the whole point: the alternative is a flash of the
+      // feed for everyone who does block it.
+      expect(displayOf(columnList)).toBe('none')
+      expect(document.documentElement).not.toHaveAttribute('data-ttfb-ready')
+
+      resolveRead()
+
+      expect(document.documentElement).toHaveAttribute('data-ttfb-ready')
+      expect(displayOf(columnList)).toBe('block')
+    })
+
+    it('opens the gate anyway if the read never calls back', () => {
+      // The live container isolates the gate from the section rules: the jsdom
+      // URL is not `/live`, so `data-ttfb-live-blocked` is never set and the
+      // only thing that can hide this element is the not-ready rule.
+      document.body.innerHTML = '<div id="tiktok-live-main-container-id"></div>'
+
+      const liveContainer = document.querySelector<HTMLElement>(
+        '#tiktok-live-main-container-id',
+      )
+      deferStorageRead()
+
+      vi.useFakeTimers()
+
+      try {
+        initContentScript()
+
+        expect(displayOf(liveContainer)).toBe('none')
+
+        // An invalidated extension context never runs the callback, and can
+        // make the `get` itself throw. The timer is armed before the call for
+        // that reason: whatever happens, the gate opens and the page is usable.
+        // Section state then follows the in-memory defaults, which is the old
+        // behaviour — a page left blank forever would not be.
+        vi.advanceTimersByTime(1500)
+
+        expect(document.documentElement).toHaveAttribute('data-ttfb-ready')
+        expect(displayOf(liveContainer)).toBe('block')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('starts without a body and picks up the observer once it exists', () => {
+      const chromeMock = getChromeMock()
+      chromeMock.storage.local.seed({
+        [SETTINGS_STORAGE_KEY]: {
+          active: true,
+          home: true,
+          explore: false,
+          live: false,
+          overlay: false,
+        },
+      })
+
+      // What `run_at: 'document_start'` actually looks like: `<html>` exists,
+      // `<body>` does not. Init has to get through the storage read here, or
+      // the hiding gate stays shut until the parse finishes and the round buys
+      // nothing.
+      const body = document.body
+      document.documentElement.removeChild(body)
+      expect(document.body).toBeNull()
+
+      initContentScript()
+
+      expect(document.documentElement).toHaveAttribute('data-ttfb-ready')
+      expect(document.documentElement).toHaveAttribute(
+        blockedAttributeFor('home'),
+      )
+
+      document.documentElement.appendChild(body)
+      document.body.innerHTML = '<div id="column-list-container"></div>'
+      document.dispatchEvent(new Event('DOMContentLoaded'))
+
+      expect(displayOf(document.querySelector('#column-list-container'))).toBe(
+        'none',
+      )
+    })
+
+    it('leaves the page visible after teardown', () => {
+      document.body.innerHTML = '<div id="column-list-container"></div>'
+
+      initContentScript()
+      teardownBlocking()
+
+      // The manifest stylesheet outlives the script, and its rules hide
+      // everything while the root lacks the attribute. Teardown therefore has
+      // to set it, not clear it.
+      expect(document.documentElement).toHaveAttribute('data-ttfb-ready')
+    })
   })
 })

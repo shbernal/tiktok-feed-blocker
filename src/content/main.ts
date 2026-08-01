@@ -13,6 +13,7 @@ import {
   TOGGLE_SHORTCUT_STORAGE_KEY,
 } from '../shared/shortcut'
 import { applyCurrentSettings, clearAllBlocking } from './blocking'
+import { ensureBlockingStyles, setDocumentReady } from './blockingStyles'
 import {
   removeFeedOverlay,
   removeOverlayStyles,
@@ -31,6 +32,13 @@ type ToggleCurrentPageBlockMessage = {
 
 const SHORTCUT_DUPLICATE_WINDOW_MS = 500
 
+// Ceiling on how long the document_start stylesheet may hide the page while
+// waiting for the storage read. If the read never lands — an invalidated
+// extension context, a service worker that will not wake — the page must still
+// become usable. Reaching this restores the old flash-of-feed behaviour, which
+// is the correct thing to degrade to: a visible page beats a blank one.
+const READY_FALLBACK_MS = 1500
+
 let settings: ExtensionSettings = {
   active: true,
   home: true,
@@ -41,6 +49,8 @@ let settings: ExtensionSettings = {
 let observer: MutationObserver | null = null
 let intervalId: number | null = null
 let pendingApplyTimeout: number | null = null
+let readyFallbackTimeout: number | null = null
+let pendingBodyCallback: (() => void) | null = null
 let lastShortcutToggleAt = 0
 // Mirrored from `chrome.commands` by the background script; until it lands the
 // manifest default keeps the fallback working.
@@ -260,7 +270,41 @@ const startBlockingLoop = () => {
   }, 1000)
 }
 
+// `setupObserver` and the overlay need `document.body`, which does not exist at
+// `document_start`. Everything else — the storage read, the root attributes,
+// the listeners — is body-independent and must not wait, because the page stays
+// hidden until the storage read resolves.
+const whenBodyAvailable = (run: () => void) => {
+  if (document.body) {
+    run()
+    return
+  }
+
+  pendingBodyCallback = () => {
+    pendingBodyCallback = null
+    run()
+  }
+  document.addEventListener('DOMContentLoaded', pendingBodyCallback, {
+    once: true,
+  })
+}
+
+const markReady = () => {
+  if (readyFallbackTimeout !== null) {
+    window.clearTimeout(readyFallbackTimeout)
+    readyFallbackTimeout = null
+  }
+
+  setDocumentReady()
+}
+
 export const initContentScript = () => {
+  // Before the storage read, so the runtime sheet's not-ready rules are in
+  // place even where the manifest stylesheet is not — unit tests, and any
+  // context that injects the script without the manifest entry.
+  ensureBlockingStyles()
+  readyFallbackTimeout = window.setTimeout(markReady, READY_FALLBACK_MS)
+
   chrome.storage.local.get(
     [
       SETTINGS_STORAGE_KEY,
@@ -276,15 +320,23 @@ export const initContentScript = () => {
         result[TOGGLE_SHORTCUT_STORAGE_KEY],
       )
       saveSettings(settings)
+      // Safe with no `<body>`: it writes root attributes and queries for media
+      // and overlay targets that simply do not exist yet. Ordered before
+      // `markReady` so the page is never revealed with stale section state.
       applySettings()
+      markReady()
     },
   )
 
   chrome.runtime.onMessage.addListener(onRuntimeMessage)
   chrome.storage.onChanged.addListener(onStorageChanged)
   document.addEventListener('keydown', onKeyDown, true)
-  setupObserver()
-  startBlockingLoop()
+
+  whenBodyAvailable(() => {
+    setupObserver()
+    startBlockingLoop()
+    applySettings()
+  })
 }
 
 export const cleanupContentScript = () => {
@@ -304,17 +356,24 @@ export const cleanupContentScript = () => {
     intervalId = null
   }
 
+  if (pendingBodyCallback) {
+    document.removeEventListener('DOMContentLoaded', pendingBodyCallback)
+    pendingBodyCallback = null
+  }
+
+  if (readyFallbackTimeout !== null) {
+    window.clearTimeout(readyFallbackTimeout)
+    readyFallbackTimeout = null
+  }
+
   cancelPendingApplySettings()
 }
 
+// Init is body-independent now, so there is nothing left to wait for. Deferring
+// to `DOMContentLoaded` here would put the storage read back behind the parse
+// and hand back the flash this round removed.
 const startContentScript = () => {
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initContentScript, {
-      once: true,
-    })
-  } else {
-    initContentScript()
-  }
+  initContentScript()
 }
 
 if (import.meta.env.MODE !== 'test' && typeof chrome !== 'undefined') {
