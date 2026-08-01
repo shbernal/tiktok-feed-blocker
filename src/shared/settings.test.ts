@@ -18,12 +18,14 @@ describe('settings helpers', () => {
         home: false,
         explore: true,
         live: false,
+        overlay: true,
       }),
     ).toEqual({
       active: true,
       home: false,
       explore: true,
       live: false,
+      overlay: true,
     })
 
     expect(
@@ -32,12 +34,14 @@ describe('settings helpers', () => {
         home: false,
         explore: false,
         live: false,
+        overlay: true,
       }),
     ).toEqual({
       active: false,
       home: false,
       explore: false,
       live: false,
+      overlay: true,
     })
   })
 
@@ -47,6 +51,7 @@ describe('settings helpers', () => {
       home: true,
       explore: false,
       live: false,
+      overlay: true,
     }
 
     expect(isAnyPageActive(partialSettings)).toBe(true)
@@ -60,6 +65,7 @@ describe('settings helpers', () => {
       home: false,
       explore: false,
       live: false,
+      overlay: true,
     })
 
     expect(
@@ -69,6 +75,7 @@ describe('settings helpers', () => {
           home: false,
           explore: false,
           live: false,
+          overlay: true,
         },
         true,
       ),
@@ -86,6 +93,7 @@ describe('settings helpers', () => {
       home: false,
       explore: false,
       live: false,
+      overlay: true,
     })
 
     expect(
@@ -96,6 +104,7 @@ describe('settings helpers', () => {
           home: true,
           explore: false,
           live: true,
+          overlay: true,
         },
       ),
     ).toEqual({
@@ -103,6 +112,7 @@ describe('settings helpers', () => {
       home: true,
       explore: false,
       live: true,
+      overlay: true,
     })
   })
 
@@ -119,7 +129,71 @@ describe('settings helpers', () => {
       home: false,
       explore: true,
       live: true,
+      overlay: true,
     })
+  })
+
+  it('keeps the overlay preference out of the page-section helpers', () => {
+    const overlayHidden: ExtensionSettings = {
+      active: false,
+      home: false,
+      explore: false,
+      live: false,
+      overlay: false,
+    }
+
+    // No page section is on, so the extension is inactive regardless of the
+    // overlay preference.
+    expect(isAnyPageActive(overlayHidden)).toBe(false)
+    expect(syncActiveWithPages(overlayHidden).active).toBe(false)
+
+    // "Block all pages" must leave the overlay preference alone in both
+    // directions.
+    expect(setAllPages(overlayHidden, true).overlay).toBe(false)
+    expect(
+      setAllPages({ ...overlayHidden, overlay: true }, false).overlay,
+    ).toBe(true)
+    expect(isAllPagesActive({ ...DEFAULT_SETTINGS, overlay: false })).toBe(true)
+  })
+
+  it('round-trips a stored overlay preference through normalization', () => {
+    expect(
+      normalizeSettings({
+        active: true,
+        home: true,
+        explore: true,
+        live: true,
+        overlay: false,
+      }).overlay,
+    ).toBe(false)
+
+    // Settings written before the field existed default to showing it.
+    expect(
+      normalizeSettings({
+        active: true,
+        home: true,
+        explore: true,
+        live: true,
+      }).overlay,
+    ).toBe(true)
+
+    // A non-boolean falls back rather than becoming truthy.
+    expect(
+      normalizeSettings({
+        active: true,
+        home: true,
+        explore: true,
+        live: true,
+        overlay: 'no',
+      }).overlay,
+    ).toBe(true)
+  })
+
+  it('defaults the overlay preference to true on the legacy storage path', () => {
+    // The legacy key only ever recorded whether blocking was on; it must not
+    // decide whether the overlay is shown.
+    expect(deriveSettingsFromStorage(undefined, false).overlay).toBe(true)
+    expect(deriveSettingsFromStorage(undefined, true).overlay).toBe(true)
   })
 
   it('derives current storage before falling back to legacy storage', () => {
@@ -138,6 +212,7 @@ describe('settings helpers', () => {
       home: false,
       explore: true,
       live: false,
+      overlay: true,
     })
 
     expect(deriveSettingsFromStorage(undefined, false)).toEqual({
@@ -145,6 +220,7 @@ describe('settings helpers', () => {
       home: false,
       explore: false,
       live: false,
+      overlay: true,
     })
   })
 })

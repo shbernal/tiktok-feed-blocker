@@ -92,7 +92,11 @@ export const clearAllBlocking = () => {
   clearLiveBlocking()
 }
 
-const shouldRenderOverlay = () => {
+const shouldRenderOverlay = (settings: ExtensionSettings) => {
+  if (!settings.overlay) {
+    return false
+  }
+
   const currentPageSection = getCurrentPageSection()
   return currentPageSection !== null
 }
@@ -119,7 +123,7 @@ export const applyCurrentSettings = (
     clearLiveBlocking()
   }
 
-  if (shouldRenderOverlay()) {
+  if (shouldRenderOverlay(settings)) {
     renderFeedOverlay(settings, handlers)
   } else {
     removeFeedOverlay()

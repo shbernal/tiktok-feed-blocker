@@ -6,6 +6,7 @@ export type ExtensionSettings = {
   home: boolean
   explore: boolean
   live: boolean
+  overlay: boolean
 }
 
 export type PageSection = 'home' | 'explore' | 'live'
@@ -15,8 +16,12 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   home: true,
   explore: true,
   live: true,
+  overlay: true,
 }
 
+// `overlay` is deliberately absent: everything that iterates this array treats
+// its members as blockable page sections, so adding it here would make
+// "Block all pages" toggle the overlay preference too.
 const PAGE_SECTIONS: PageSection[] = ['home', 'explore', 'live']
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -80,11 +85,14 @@ export const normalizeSettings = (
     })
   }
 
+  // This is an explicit object literal, so any new field has to be listed here
+  // or it is silently dropped on every read.
   return syncActiveWithPages({
     active: legacyActive,
     home: readBoolean(value.home, fallback.home),
     explore: readBoolean(value.explore, fallback.explore),
     live: readBoolean(value.live, fallback.live),
+    overlay: readBoolean(value.overlay, fallback.overlay),
   })
 }
 

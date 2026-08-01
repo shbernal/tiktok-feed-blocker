@@ -36,6 +36,7 @@ let settings: ExtensionSettings = {
   home: true,
   explore: true,
   live: true,
+  overlay: true,
 }
 let observer: MutationObserver | null = null
 let intervalId: number | null = null

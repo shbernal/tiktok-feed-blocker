@@ -13,6 +13,7 @@ describe('popup app', () => {
       home: true,
       explore: false,
       live: true,
+      overlay: true,
     }
 
     chromeMock.storage.local.seed({
@@ -35,6 +36,75 @@ describe('popup app', () => {
     })
   })
 
+  it('toggles the overlay without touching the page sections', async () => {
+    const user = userEvent.setup()
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: true,
+        explore: true,
+        live: true,
+        overlay: true,
+      },
+    })
+
+    render(<App />)
+
+    const overlayToggle = await screen.findByRole('checkbox', {
+      name: 'Show overlay',
+    })
+    expect(overlayToggle).toBeChecked()
+
+    await user.click(overlayToggle)
+
+    expect(overlayToggle).not.toBeChecked()
+    expect(chromeMock.storage.local.set).toHaveBeenLastCalledWith({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: true,
+        explore: true,
+        live: true,
+        overlay: false,
+      },
+    })
+
+    // Blocking is untouched, so "Block all pages" stays on.
+    expect(
+      screen.getByRole('checkbox', { name: 'Block all pages' }),
+    ).toBeChecked()
+  })
+
+  it('leaves the overlay preference alone when blocking all pages', async () => {
+    const user = userEvent.setup()
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: false,
+        home: false,
+        explore: false,
+        live: false,
+        overlay: false,
+      },
+    })
+
+    render(<App />)
+
+    await user.click(
+      await screen.findByRole('checkbox', { name: 'Block all pages' }),
+    )
+
+    expect(chromeMock.storage.local.set).toHaveBeenLastCalledWith({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: true,
+        explore: true,
+        live: true,
+        overlay: false,
+      },
+    })
+  })
+
   it('toggles all page sections and persists the synced settings', async () => {
     const user = userEvent.setup()
     const chromeMock = getChromeMock()
@@ -44,6 +114,7 @@ describe('popup app', () => {
         home: true,
         explore: true,
         live: true,
+        overlay: true,
       },
     })
     chromeMock.tabs.query.mockImplementation((_queryInfo, callback) => {
@@ -66,6 +137,7 @@ describe('popup app', () => {
       home: false,
       explore: false,
       live: false,
+      overlay: true,
     }
 
     expect(toggleAll).not.toBeChecked()
@@ -93,6 +165,7 @@ describe('popup app', () => {
         home: false,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
     chromeMock.tabs.query.mockImplementation((_queryInfo, callback) => {
@@ -115,6 +188,7 @@ describe('popup app', () => {
       home: true,
       explore: false,
       live: false,
+      overlay: true,
     }
 
     expect(homeToggle).toBeChecked()

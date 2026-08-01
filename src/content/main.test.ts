@@ -23,6 +23,7 @@ describe('content script', () => {
         home: true,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
     document.body.innerHTML = `
@@ -56,6 +57,7 @@ describe('content script', () => {
         home: false,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
 
@@ -73,6 +75,7 @@ describe('content script', () => {
         home: true,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
     document.body.innerHTML = `
@@ -109,6 +112,7 @@ describe('content script', () => {
         home: false,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
 
@@ -126,6 +130,7 @@ describe('content script', () => {
         home: false,
         explore: true,
         live: false,
+        overlay: true,
       },
     })
     document.body.innerHTML = '<main id="main-content-explore_page"></main>'
@@ -153,6 +158,7 @@ describe('content script', () => {
         home: false,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
 
@@ -164,6 +170,27 @@ describe('content script', () => {
     expect(blockButton).toHaveTextContent('Block Explore')
   })
 
+  it('skips the overlay when the preference is off but still blocks', () => {
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: false,
+        explore: true,
+        live: false,
+        overlay: false,
+      },
+    })
+    document.body.innerHTML = '<main id="main-content-explore_page"></main>'
+
+    initContentScript()
+
+    expect(document.getElementById(OVERLAY_ID)).toBeNull()
+
+    const mainContent = document.getElementById('main-content-explore_page')
+    expect(mainContent).toHaveStyle({ display: 'none' })
+  })
+
   it('gives the overlay controls an accessible name in both states', () => {
     const chromeMock = getChromeMock()
     chromeMock.storage.local.seed({
@@ -172,6 +199,7 @@ describe('content script', () => {
         home: false,
         explore: true,
         live: false,
+        overlay: true,
       },
     })
     document.body.innerHTML = '<main id="main-content-explore_page"></main>'
@@ -201,6 +229,7 @@ describe('content script', () => {
         home: false,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
     document.body.innerHTML = '<div id="column-list-container"></div>'
@@ -227,6 +256,7 @@ describe('content script', () => {
         home: true,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
     expect(columnList!.style.display).toBe('none')
@@ -245,6 +275,7 @@ describe('content script', () => {
         home: true,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
     document.body.innerHTML = '<div id="column-list-container"></div>'
@@ -268,6 +299,7 @@ describe('content script', () => {
         home: false,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
   })
@@ -280,6 +312,7 @@ describe('content script', () => {
         home: true,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
     document.body.innerHTML = '<div id="column-list-container"></div>'
@@ -298,6 +331,7 @@ describe('content script', () => {
         home: false,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
   })
@@ -310,6 +344,7 @@ describe('content script', () => {
         home: true,
         explore: false,
         live: false,
+        overlay: true,
       },
       [TOGGLE_SHORTCUT_STORAGE_KEY]: 'Command+Shift+8',
     })
@@ -331,6 +366,7 @@ describe('content script', () => {
         home: true,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
 
@@ -346,6 +382,7 @@ describe('content script', () => {
         home: false,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
   })
@@ -360,6 +397,7 @@ describe('content script', () => {
         home: false,
         explore: false,
         live: true,
+        overlay: true,
       },
     })
     document.body.innerHTML = `
@@ -392,6 +430,7 @@ describe('content script', () => {
         home: false,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
 
@@ -409,6 +448,7 @@ describe('content script', () => {
         home: true,
         explore: false,
         live: false,
+        overlay: true,
       },
     })
     document.body.innerHTML = `
