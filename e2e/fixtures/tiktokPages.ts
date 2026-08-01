@@ -24,7 +24,7 @@ const pageShell = (title: string, body: string) => `<!doctype html>
       main,
       section,
       #column-list-container,
-      .ejpasz60-fixture {
+      #tiktok-live-main-container-id {
         min-height: 420px;
         padding: 24px;
       }
@@ -88,10 +88,14 @@ const explorePage = pageShell(
   `,
 )
 
+// The old fixture had no `#tiktok-live-main-container-id` at all, so Live
+// coverage rested entirely on a hashed class that real TikTok had already
+// rotated away. The classes here are the real ones, kept only so the fixture
+// looks like the page; nothing targets them.
 const livePage = pageShell(
   'TikTok Live Fixture',
   `
-    <div class="ejpasz60-fixture">
+    <div id="tiktok-live-main-container-id" class="tiktok-mikc7i e1x0ojj00">
       <h1>Live fixture</h1>
       <video id="live-video"></video>
       <audio id="live-audio"></audio>

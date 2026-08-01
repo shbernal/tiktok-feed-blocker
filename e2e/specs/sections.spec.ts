@@ -181,7 +181,7 @@ test('blocks and restores Live targets', async ({
   const page = await newTikTokPage()
   await page.goto('https://www.tiktok.com/live')
 
-  const liveTarget = page.locator('div[class*="ejpasz60"]')
+  const liveTarget = page.locator('#tiktok-live-main-container-id')
   await expect(liveTarget).toHaveCSS('display', 'none')
   await expect(liveTarget).toHaveAttribute('data-ttfb-live-hidden', 'true')
   await expect(page.locator('#ttfb-feed-overlay')).toBeVisible()

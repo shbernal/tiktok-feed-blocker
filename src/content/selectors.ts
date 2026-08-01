@@ -19,8 +19,7 @@ export const SELECTORS = {
   columnListContainer: '#column-list-container',
   homeCommentSidebar: `:is(${HOME_COMMENT_SIDEBAR_SELECTORS.join(', ')})`,
   feedNavigationContainer: '[class*="DivFeedNavigationContainer"]',
-  livePageMainContainer:
-    ':is(#tiktok-live-main-container-id, div[class*="ejpasz60"])',
+  livePageMainContainer: '#tiktok-live-main-container-id',
 } as const
 
 export const isLivePage = () => window.location.pathname.startsWith('/live')
@@ -40,7 +39,7 @@ export const hasExploreTargets = () => {
 export const hasLiveTargets = () => {
   return (
     isLivePage() &&
-    document.querySelectorAll(SELECTORS.livePageMainContainer).length > 0
+    document.querySelector(SELECTORS.livePageMainContainer) !== null
   )
 }
 
