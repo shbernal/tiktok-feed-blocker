@@ -17,6 +17,7 @@ const settingsWithOnly = (section: PageSection): ExtensionSettings => ({
   home: section === 'home',
   explore: section === 'explore',
   live: section === 'live',
+  overlay: true,
 })
 
 const getRequestedSections = () => {

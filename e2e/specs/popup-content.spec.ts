@@ -21,6 +21,7 @@ test('popup changes update an open TikTok fixture page', async ({
     home: false,
     explore: false,
     live: false,
+    overlay: true,
   })
 
   const page = await newTikTokPage()
@@ -50,5 +51,6 @@ test('popup changes update an open TikTok fixture page', async ({
     home: false,
     explore: true,
     live: false,
+    overlay: true,
   })
 })

@@ -135,3 +135,31 @@ input:checked + .slider:hover {
 .switch-small input:checked + .slider::before {
   transform: translateX(24px);
 }
+
+/* The popup renders over the browser's own popup chrome, which follows the OS
+   theme. `html, body` stay transparent in both themes; only the card, its text
+   and the unchecked slider need to change. The #ff0050/#ff4081 accent is the
+   product's, so it stays put — but the focus outline lightens, because #ff4081
+   on a dark card is too close in luminance to read as a focus ring. */
+@media (prefers-color-scheme: dark) {
+  .popup-container {
+    background: #1c1c1e;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  }
+
+  .switch-label {
+    color: #e8e8ea;
+  }
+
+  .slider {
+    background-color: #48484a;
+  }
+
+  .slider::before {
+    background-color: #f2f2f7;
+  }
+
+  .switch input:focus + .slider {
+    outline-color: #ff85ab;
+  }
+}

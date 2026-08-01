@@ -89,6 +89,11 @@ function App() {
     persistAndNotify(setAllPages(settings, !isAllPagesActive(settings)))
   }
 
+  // Not a page section: it must not move with "Block all pages".
+  const toggleOverlay = () => {
+    persistAndNotify({ ...settings, overlay: !settings.overlay })
+  }
+
   const toggleSection = (section: PageSection) => {
     persistAndNotify(
       syncActiveWithPages({
@@ -155,6 +160,19 @@ function App() {
                 type="checkbox"
                 checked={settings.live}
                 onChange={() => toggleSection('live')}
+              />
+              <span className="slider"></span>
+            </label>
+          </div>
+
+          <div className="switch-row">
+            <span className="switch-label">Show overlay</span>
+            <label className="switch switch-small">
+              <input
+                aria-label="Show overlay"
+                type="checkbox"
+                checked={settings.overlay}
+                onChange={toggleOverlay}
               />
               <span className="slider"></span>
             </label>

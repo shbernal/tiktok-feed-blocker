@@ -7,7 +7,7 @@ to the Chrome Web Store and addons.mozilla.org.
 
 `.github/workflows/ci.yml` runs on pull requests and pushes to `main`.
 
-The CI job:
+The `validate` job:
 
 1. Checks out the repository.
 2. Installs pnpm `11.3.0`.
@@ -15,10 +15,26 @@ The CI job:
 4. Installs dependencies with `pnpm install --frozen-lockfile`.
 5. Runs `pnpm format`.
 6. Runs `pnpm typecheck`.
-7. Runs `pnpm test`.
+7. Runs `pnpm test:coverage`, which enforces the coverage thresholds in
+   `vitest.config.ts`.
 8. Runs `pnpm build`.
 9. Runs `pnpm lint:firefox`, which builds the Firefox target and validates it
    with `web-ext lint`.
+
+The `e2e` job runs the mock-backed Playwright suite (`e2e/specs/`) separately,
+so a browser-level flake reddens only the end-to-end signal and leaves the
+unit-test result readable. It installs Playwright's Chromium and uploads the
+Playwright report as an artifact. `e2e/real/` and `e2e/manual/` stay out of CI:
+they drive real TikTok and need credentials.
+
+The coverage thresholds are a ratchet, not a target — set a couple of points
+below the measured numbers so an unrelated change cannot quietly erode
+coverage. Raise them when coverage rises. The text reporter omits fully covered
+files; that is `skipFull` behavior, not a gap in the report.
+
+`.github/dependabot.yml` opens weekly `npm` and `github-actions` update pull
+requests, with development dependencies grouped into one. Store reviewers flag
+stale bundled dependencies, so this needs to stay current.
 
 `.github/workflows/publish-cws.yml` runs when a GitHub Release is published.
 It validates the release, builds the extension, uploads the packaged `dist/`

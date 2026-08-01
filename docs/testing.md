@@ -7,7 +7,8 @@ runs Vitest once and exits with a clear pass/fail result.
 
 - `pnpm test` runs the full test suite once.
 - `pnpm test:watch` starts Vitest in watch mode for local development.
-- `pnpm test:coverage` runs tests with V8 coverage output in `coverage/`.
+- `pnpm test:coverage` runs tests with V8 coverage output in `coverage/` and
+  fails below the thresholds in `vitest.config.ts`. This is what CI runs.
 - `pnpm e2e` builds the extension and runs deterministic Playwright extension
   tests against local TikTok-shaped fixtures.
 - `pnpm e2e:headed` runs the fixture-based Playwright tests in headed mode.

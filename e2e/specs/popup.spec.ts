@@ -20,6 +20,7 @@ test('popup reflects and persists section toggles', async ({
     home: true,
     explore: false,
     live: true,
+    overlay: true,
   })
 
   const popup = await openExtensionPage('/src/popup/index.html')
@@ -37,6 +38,7 @@ test('popup reflects and persists section toggles', async ({
     home: true,
     explore: true,
     live: true,
+    overlay: true,
   })
 
   await clickPopupSwitch(popup, 'Block all pages')
@@ -49,6 +51,7 @@ test('popup reflects and persists section toggles', async ({
     home: false,
     explore: false,
     live: false,
+    overlay: true,
   })
 
   await clickPopupSwitch(popup, 'Block all pages')
@@ -61,5 +64,6 @@ test('popup reflects and persists section toggles', async ({
     home: true,
     explore: true,
     live: true,
+    overlay: true,
   })
 })
