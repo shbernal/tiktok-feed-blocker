@@ -129,6 +129,15 @@ excluded:
 Both exclusions are load-bearing knowledge, not oversights. Removing either from
 the exclusion list turns a passing suite red without anything being broken.
 
+`loadBearingSelectors` also drives the smoke block's blocked/restored
+assertions. Since hiding moved to a stylesheet gated on a root attribute, the
+smoke test proves blocking took hold by checking `<html>` for
+`data-ttfb-<section>-blocked` and the computed `display` of those selectors,
+rather than the per-element `data-ttfb-*-hidden` attributes it used to count.
+This is the check that confirms the author-origin `!important` rules actually
+win against TikTok's own styles — the fixture suite cannot prove that, because
+the fixtures do not carry TikTok's stylesheets.
+
 ## Overlay Screenshot Proof
 
 Real TikTok overlay checks attach proof artifacts for every overlay state they

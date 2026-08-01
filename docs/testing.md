@@ -163,6 +163,9 @@ test still passes. Keep those call sites callback-based.
 - `src/content/main.test.ts` covers DOM hiding/restoring, managed media
   mute/restore, blocked and unblocked overlay controls, storage changes, and
   runtime messages.
+- `src/content/main.test.ts` also pins the property that motivated CSS-based
+  hiding: a burst of inserted elements is already `display: none` before the
+  deferred sweep runs.
 - `tests/browser-api-compat.test.ts` covers the callback-only `chrome.*` rule
   across `src/`.
 
@@ -179,3 +182,19 @@ Prefer the smallest test layer that proves the behavior.
 
 Avoid testing private implementation details when a user-visible state, storage
 write, runtime message, or DOM mutation can prove the same behavior.
+
+Assert hiding through `getComputedStyle(...).display`, not through inline
+styles or bookkeeping attributes. Blocking is a stylesheet gated on a root
+attribute on `<html>`, so nothing is written to the hidden elements themselves.
+jsdom resolves the full cascade this relies on — `:is()`, `[class*=...]`,
+`!important`, and the root-attribute gate — so unit tests can assert the same
+outcome the Playwright suites do. Asserting the root attribute as well is worth
+it where it distinguishes "the extension turned blocking off" from "the
+extension still thinks it is on but the CSS stopped matching".
+
+Content-script tests must run `clearAllBlocking()` alongside
+`cleanupContentScript()` in teardown. The shared `document.body.innerHTML = ''`
+in `src/test/setup.ts` does not reach the root attributes or the injected
+stylesheet, so without it blocking state leaks into the next test. That pair is
+the same one `import.meta.hot.dispose` runs, so the tests tear down the way
+production does.

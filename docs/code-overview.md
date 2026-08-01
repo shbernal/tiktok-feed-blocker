@@ -114,17 +114,18 @@ The popup should stay compact because it is designed around a 320px width.
 The content script runs on TikTok pages and owns all DOM mutation behavior. It
 is split across `src/content/`:
 
-| Module         | Responsibility                                                                                |
-| -------------- | --------------------------------------------------------------------------------------------- |
-| `selectors.ts` | TikTok selectors, hidden-element attributes, Home/Explore/Live detection, page-section labels |
-| `dom.ts`       | idempotent hide and restore of matched elements                                               |
-| `media.ts`     | saving and restoring previous muted, volume, and paused state                                 |
-| `overlay.ts`   | overlay element ids, the injected stylesheet, render and removal                              |
-| `blocking.ts`  | per-section apply and clear, and `applyCurrentSettings`                                       |
-| `main.ts`      | lifecycle only: storage load, listeners, keydown, observer, interval, init and cleanup        |
+| Module              | Responsibility                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `selectors.ts`      | TikTok selectors, Home/Explore/Live detection, page-section labels                     |
+| `blockingStyles.ts` | the blocking stylesheet and the root attributes that gate it                           |
+| `media.ts`          | saving and restoring previous muted, volume, and paused state                          |
+| `overlay.ts`        | overlay element ids, the injected stylesheet, render and removal                       |
+| `blocking.ts`       | per-section apply and clear, and `applyCurrentSettings`                                |
+| `main.ts`           | lifecycle only: storage load, listeners, keydown, observer, interval, init and cleanup |
 
-The dependency direction is one-way — `selectors` ← `media` ← `dom` ←
-`blocking`, with `overlay` below `blocking`. `main.ts` owns the settings
+The dependency direction is one-way — `selectors` ← `blockingStyles` ←
+`blocking`, with `overlay` below `blocking`. `media.ts` sits outside that chain
+and imports nothing from `src/content/`. `main.ts` owns the settings
 singleton and injects it, along with the overlay toggle callbacks, into
 `overlay.ts` and `blocking.ts`. Neither imports back into `main.ts`; keeping it
 that way is what stops the cycle.
@@ -135,8 +136,8 @@ the tests and the HMR dispose hook import them from there.
 Behavior across those modules:
 
 - detecting Home, Explore, and Live targets;
-- hiding matching page containers with managed data attributes, including the
-  Home comments sidebar when it is already open from the feed;
+- hiding matching page containers, including the Home comments sidebar when it
+  is already open from the feed;
 - muting media while preserving previous muted, volume, and paused state;
 - restoring hidden elements and media state when blocking is disabled;
 - rendering the in-page overlay, with a centered toggle while a section is
@@ -148,8 +149,44 @@ Behavior across those modules:
 - using a mutation observer and interval loop to reapply blocking as TikTok
   updates the page.
 
-DOM changes should remain idempotent. Clear/restore paths need to undo every
-managed hide or media mutation introduced by apply paths.
+### How Blocking Is Applied
+
+Hiding is declarative. `blockingStyles.ts` injects one static stylesheet whose
+every rule is gated on a root attribute, and blocking a section is a single
+`toggleAttribute` on `<html>`:
+
+```css
+html[data-ttfb-home-blocked] #column-list-container {
+  display: none !important;
+}
+```
+
+The point is not only that a settings change is O(1) instead of O(DOM). It is
+that anything TikTok renders afterwards is hidden by the CSS engine as it
+mounts, so there is no window where fresh feed content is visible while waiting
+for the next sweep. Restore is equally total: clear the attribute and every
+element the rules covered comes back, with no per-element bookkeeping to leak.
+
+Two things stay in JS, and they are why the observer and interval still exist:
+
+- **Muting.** CSS cannot mute. Each section names the containers it mutes in
+  `blocking.ts`, and muting is re-applied on every sweep as media mounts. Home
+  and Explore mute inside the container they hide; Live mutes document-wide,
+  because the player can sit outside the container the live selector matches.
+- **The Live URL gate.** `applyCurrentSettings` re-evaluates `isLivePage()` each
+  sweep and only sets `data-ttfb-live-blocked` when both the setting and the URL
+  agree. A root attribute toggled only on settings change would survive a
+  client-side navigation off `/live` and mute whatever TikTok rendered next.
+
+The one failure mode the stylesheet cannot defend against is TikTok setting
+`display` inline on a target: an inline style beats an author-origin
+`!important` rule. It has not been observed, and it fails silently, so it is the
+first thing to check if a section ever stops hiding.
+
+Media changes should remain idempotent. Clear/restore paths need to undo every
+media mutation the apply paths introduced, and restore looks media up by its
+`data-ttfb-previous-muted` attribute rather than by container, so teardown still
+works after TikTok has replaced the container the media was muted through.
 
 Prefer ids over class selectors in `selectors.ts`. TikTok interpolates a
 per-build hash between styled-component name segments and rotates its
