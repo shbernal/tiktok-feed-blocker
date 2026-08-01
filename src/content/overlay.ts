@@ -169,6 +169,59 @@ const ensureOverlayStyles = () => {
   }
 }
 
+/* A white card and a white pill sit badly over TikTok's dark UI. The
+   #ff0050/#ff4081 accent is the product's and stays in both themes; the focus
+   outline lightens because #ff4081 on a dark surface is too close in luminance
+   to read as a focus ring. The block button inverts to keep its contrast
+   against the pill it sits in. */
+@media (prefers-color-scheme: dark) {
+  #${OVERLAY_ID}.ttfb-overlay-blocked {
+    background: #1c1c1e;
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  }
+
+  #${OVERLAY_ID}.ttfb-overlay-available {
+    background: rgba(28, 28, 30, 0.96);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .ttfb-title {
+    color: #f5f5f7;
+  }
+
+  .ttfb-toggle-label {
+    color: #d8d8dc;
+  }
+
+  .ttfb-slider {
+    background-color: #48484a;
+  }
+
+  .ttfb-slider::before {
+    background-color: #f2f2f7;
+  }
+
+  .ttfb-switch input:focus + .ttfb-slider {
+    outline-color: #ff85ab;
+  }
+
+  .ttfb-block-button {
+    background: #f2f2f7;
+    color: #111;
+  }
+
+  .ttfb-block-button:hover {
+    background: #ff0050;
+    color: #fff;
+  }
+
+  .ttfb-block-button:focus {
+    outline-color: #ff85ab;
+  }
+}
+
 `
 
   document.documentElement.appendChild(style)
