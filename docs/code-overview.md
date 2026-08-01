@@ -230,6 +230,14 @@ UPDATE_BLOCKING_CSS=1 pnpm test blocking-css
 
 It is listed in `.prettierignore` because that guard compares exact bytes.
 
+That guard is also why `tsconfig.node.json` includes the `DOM` lib: `tests/` is
+in that project and imports the stylesheet builder, which sits alongside DOM
+helpers in `blockingStyles.ts`. The cleaner fix is to split the pure selector
+table out of `selectors.ts`, which mixes it with DOM predicates, so `tests/` can
+import data without pulling `DOM` into a Node project. It was left undone as a
+larger refactor than the guard needed; do it if `tests/` ever has to import more
+of `src/`.
+
 Media changes should remain idempotent. Clear/restore paths need to undo every
 media mutation the apply paths introduced, and restore looks media up by its
 `data-ttfb-previous-muted` attribute rather than by container, so teardown still
@@ -241,6 +249,21 @@ emotion-style class names per build, so a `[class*=...]` selector may name only
 one segment and a bare hashed token is never a durable hook. Real-site coverage
 for the selectors each section depends on lives in
 [Real TikTok E2E](./real-tiktok-e2e.md).
+
+That preference left Live resting on a single hook. `hasLiveTargets` requires
+both `isLivePage()` and `#tiktok-live-main-container-id`, and the class fallback
+that used to sit beside the id was deleted because it matched nothing on real
+`/live` — a selector matching zero elements today will not start matching on the
+day the id disappears, and keeping it made one point of failure look like two.
+No stable class token was found to replace it. So if TikTok renames that id,
+Live detection fails even on a correct URL.
+
+Dropping the id from detection and letting Live ride on `location.pathname`
+alone is the obvious repair, and it is deliberately not done: it would split
+detection from blocking, letting the overlay claim "Live blocked" on a page
+whose container never resolved and whose media therefore was never muted. The
+real-site `loadBearingSelectors` assertion is the safety net instead — it fails
+loudly when a selector stops matching, which is the signal this trades on.
 
 Teardown has to cancel deferred work too, not just detach listeners. The
 observer defers the re-apply by 100ms; `cleanupContentScript` clears the pending
