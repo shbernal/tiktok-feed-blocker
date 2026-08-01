@@ -41,7 +41,9 @@ test('popup changes update an open TikTok fixture page', async ({
   await clickPopupSwitch(popup, 'Block Explore')
 
   await expect(mainContent).toHaveCSS('display', 'none')
-  await expect(mainContent).toHaveAttribute('data-ttfb-explore-hidden', 'true')
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-ttfb-explore-blocked',
+  )
   await expect(page.locator('#ttfb-feed-overlay')).toBeVisible()
   await expect(page.locator('#ttfb-active-toggle-label')).toHaveText(
     'Block Explore',

@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
 // `overlay` is deliberately absent: everything that iterates this array treats
 // its members as blockable page sections, so adding it here would make
 // "Block all pages" toggle the overlay preference too.
-const PAGE_SECTIONS: PageSection[] = ['home', 'explore', 'live']
+export const PAGE_SECTIONS: PageSection[] = ['home', 'explore', 'live']
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null

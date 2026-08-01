@@ -1,106 +1,91 @@
-import { type ExtensionSettings } from '../shared/settings'
-import { hideElement, hideElements, showElements } from './dom'
+import {
+  PAGE_SECTIONS,
+  type ExtensionSettings,
+  type PageSection,
+} from '../shared/settings'
+import {
+  clearAllSectionAttributes,
+  ensureBlockingStyles,
+  removeBlockingStyles,
+  setSectionBlocked,
+} from './blockingStyles'
 import {
   muteMediaInContainers,
-  muteMediaInLivePages,
-  restoreMediaInLivePages,
+  restoreAllManagedMedia,
+  restoreMediaInContainers,
 } from './media'
 import {
   removeFeedOverlay,
   renderFeedOverlay,
   type OverlayHandlers,
 } from './overlay'
-import {
-  getCurrentPageSection,
-  HIDDEN_EXPLORE_ATTR,
-  HIDDEN_HOME_ATTR,
-  HIDDEN_LIVE_ATTR,
-  isLivePage,
-  SELECTORS,
-} from './selectors'
+import { getCurrentPageSection, isLivePage, SELECTORS } from './selectors'
 
-export const clearHomeBlocking = () => {
-  showElements(SELECTORS.columnListContainer, HIDDEN_HOME_ATTR)
-  showElements(SELECTORS.progressIndicator, HIDDEN_HOME_ATTR)
-  showElements(SELECTORS.homeCommentSidebar, HIDDEN_HOME_ATTR)
-  showElements(SELECTORS.feedNavigationContainer, HIDDEN_HOME_ATTR)
+const queryAll = (selector: string) => {
+  return Array.from(document.querySelectorAll<HTMLElement>(selector))
 }
 
-export const clearExploreBlocking = () => {
-  showElements(SELECTORS.mainContent, HIDDEN_EXPLORE_ATTR)
-}
-
-export const clearLiveBlocking = () => {
-  showElements(SELECTORS.livePageMainContainer, HIDDEN_LIVE_ATTR)
-  restoreMediaInLivePages()
-}
-
-export const applyHomeBlocking = () => {
-  const columnListContainer = document.querySelector<HTMLElement>(
-    SELECTORS.columnListContainer,
-  )
-  if (columnListContainer) {
-    hideElement(columnListContainer, HIDDEN_HOME_ATTR)
-    muteMediaInContainers([columnListContainer])
+// Hiding is declarative; muting is not, so each section still names the
+// containers it mutes. Home and Explore mute inside the container they hide.
+// Live mutes document-wide because the player can sit outside the container
+// the live selector matches.
+const mediaContainersFor = (section: PageSection): Element[] => {
+  switch (section) {
+    case 'home':
+      return queryAll(SELECTORS.columnListContainer)
+    case 'explore':
+      return queryAll(SELECTORS.mainContent)
+    case 'live':
+      return isLivePage() ? [document.documentElement] : []
   }
-
-  const progressIndicator = document.querySelector<HTMLElement>(
-    SELECTORS.progressIndicator,
-  )
-  if (progressIndicator) {
-    hideElement(progressIndicator, HIDDEN_HOME_ATTR)
-  }
-
-  hideElements(SELECTORS.feedNavigationContainer, HIDDEN_HOME_ATTR)
-  hideElements(SELECTORS.homeCommentSidebar, HIDDEN_HOME_ATTR)
 }
 
-export const applyExploreBlocking = () => {
-  const mainContent = document.querySelector<HTMLElement>(SELECTORS.mainContent)
-  if (!mainContent) {
-    return
-  }
-
-  hideElement(mainContent, HIDDEN_EXPLORE_ATTR)
-  muteMediaInContainers([mainContent])
+// Live blocking is gated on the URL as well as the setting. The container id
+// only exists on `/live`, but muting there is document-wide, so an attribute
+// left set across a client-side navigation would mute whatever page TikTok
+// rendered next. The gate is re-evaluated on every sweep, which is what keeps
+// SPA navigation handled now that hiding no longer walks the DOM.
+const isSectionBlocked = (
+  settings: ExtensionSettings,
+  section: PageSection,
+) => {
+  return section === 'live' ? settings.live && isLivePage() : settings[section]
 }
 
-export const applyLiveBlocking = () => {
-  if (!isLivePage()) {
-    return
-  }
+const applySectionBlocking = (
+  settings: ExtensionSettings,
+  section: PageSection,
+) => {
+  const blocked = isSectionBlocked(settings, section)
+  setSectionBlocked(section, blocked)
 
-  hideElements(SELECTORS.livePageMainContainer, HIDDEN_LIVE_ATTR)
-  muteMediaInLivePages()
+  const containers = mediaContainersFor(section)
+  if (blocked) {
+    muteMediaInContainers(containers)
+  } else {
+    restoreMediaInContainers(containers)
+  }
 }
 
+// The full undo: attributes off, every managed media restored wherever it sits,
+// and the stylesheet gone. Restoring by attribute rather than by container
+// matters here, because teardown can run after TikTok has already replaced the
+// container the media was muted through.
 export const clearAllBlocking = () => {
-  clearHomeBlocking()
-  clearExploreBlocking()
-  clearLiveBlocking()
+  clearAllSectionAttributes()
+  restoreAllManagedMedia()
+  removeBlockingStyles()
 }
 
 export const applyCurrentSettings = (
   settings: ExtensionSettings,
   handlers: OverlayHandlers,
 ) => {
-  if (settings.home) {
-    applyHomeBlocking()
-  } else {
-    clearHomeBlocking()
-  }
+  ensureBlockingStyles()
 
-  if (settings.explore) {
-    applyExploreBlocking()
-  } else {
-    clearExploreBlocking()
-  }
-
-  if (settings.live) {
-    applyLiveBlocking()
-  } else {
-    clearLiveBlocking()
-  }
+  PAGE_SECTIONS.forEach(section => {
+    applySectionBlocking(settings, section)
+  })
 
   // Resolved once per sweep and shared with the overlay, which would otherwise
   // walk the document for the same answer immediately afterwards.

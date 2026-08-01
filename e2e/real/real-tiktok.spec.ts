@@ -7,7 +7,6 @@ import { expectVisibleOverlayProof } from './overlayProof'
 type RealTikTokCase = {
   section: PageSection
   url: string
-  hiddenAttribute: string
   overlayLabel: string
 }
 
@@ -34,19 +33,16 @@ const smokeCases: RealTikTokCase[] = [
   {
     section: 'home',
     url: 'https://www.tiktok.com/',
-    hiddenAttribute: 'data-ttfb-home-hidden',
     overlayLabel: 'Block Home',
   },
   {
     section: 'explore',
     url: 'https://www.tiktok.com/explore',
-    hiddenAttribute: 'data-ttfb-explore-hidden',
     overlayLabel: 'Block Explore',
   },
   {
     section: 'live',
     url: 'https://www.tiktok.com/live',
-    hiddenAttribute: 'data-ttfb-live-hidden',
     overlayLabel: 'Block Live',
   },
 ]
@@ -63,6 +59,36 @@ const loadBearingSelectors: Record<PageSection, string[]> = {
   home: [SELECTORS.columnListContainer, SELECTORS.feedNavigationContainer],
   explore: [SELECTORS.mainContent],
   live: [SELECTORS.livePageMainContainer],
+}
+
+// Blocking is a stylesheet gated on a root attribute, so proving it took hold
+// means checking `<html>` and the computed display of the selectors the section
+// hides. The old per-element `data-ttfb-*-hidden` attributes are gone; computed
+// display is the better proof anyway, because it is what the user sees.
+const expectSectionBlocked = async (
+  page: Page,
+  section: PageSection,
+  blocked: boolean,
+) => {
+  const attribute = `data-ttfb-${section}-blocked`
+  const html = page.locator('html')
+
+  if (blocked) {
+    await expect(html).toHaveAttribute(attribute, { timeout: smokeTimeout })
+  } else {
+    await expect(html).not.toHaveAttribute(attribute, { timeout: smokeTimeout })
+  }
+
+  for (const selector of loadBearingSelectors[section]) {
+    const target = page.locator(selector).first()
+    const display = expect(target, `${section}: \`${selector}\``)
+
+    if (blocked) {
+      await display.toHaveCSS('display', 'none', { timeout: smokeTimeout })
+    } else {
+      await display.not.toHaveCSS('display', 'none', { timeout: smokeTimeout })
+    }
+  }
 }
 
 const gotoRealTikTokPage = async (page: Page, url: string) => {
@@ -97,9 +123,6 @@ test.describe('real TikTok selector smoke', () => {
       await gotoRealTikTokPage(page, smokeCase.url)
 
       const overlay = page.locator('#ttfb-feed-overlay')
-      const hiddenTargets = page.locator(
-        `[${smokeCase.hiddenAttribute}="true"]`,
-      )
 
       await expect(overlay).toBeVisible({ timeout: smokeTimeout })
       await expect(page.locator('#ttfb-active-toggle-label')).toHaveText(
@@ -115,7 +138,7 @@ test.describe('real TikTok selector smoke', () => {
         expectedClass: /ttfb-overlay-blocked/,
         timeout: smokeTimeout,
       })
-      await expect(hiddenTargets.first()).toBeAttached()
+      await expectSectionBlocked(page, smokeCase.section, true)
 
       await overlay.locator('.ttfb-slider').click()
 
@@ -136,7 +159,7 @@ test.describe('real TikTok selector smoke', () => {
       })
       expect(availableProof.css.top).toBe('16px')
       expect(availableProof.css.right).toBe('16px')
-      await expect(hiddenTargets).toHaveCount(0)
+      await expectSectionBlocked(page, smokeCase.section, false)
       await expect.poll(readSettings, { timeout: smokeTimeout }).toMatchObject({
         active: false,
         home: false,
@@ -160,7 +183,7 @@ test.describe('real TikTok selector smoke', () => {
         expectedClass: /ttfb-overlay-blocked/,
         timeout: smokeTimeout,
       })
-      await expect(hiddenTargets.first()).toBeAttached()
+      await expectSectionBlocked(page, smokeCase.section, true)
       await expect
         .poll(readSettings, { timeout: smokeTimeout })
         .toMatchObject(settingsWithOnly(smokeCase.section))

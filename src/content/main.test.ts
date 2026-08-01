@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SETTINGS_STORAGE_KEY } from '../shared/settings'
 import { TOGGLE_SHORTCUT_STORAGE_KEY } from '../shared/shortcut'
 import { getChromeMock } from '../test/chrome'
+import { clearAllBlocking } from './blocking'
 import { cleanupContentScript, initContentScript } from './main'
 
 const OVERLAY_ID = 'ttfb-feed-overlay'
@@ -10,9 +11,26 @@ const OVERLAY_TOGGLE_ID = 'ttfb-active-toggle'
 const OVERLAY_TOGGLE_LABEL_ID = 'ttfb-active-toggle-label'
 const OVERLAY_BLOCK_BUTTON_ID = 'ttfb-feed-overlay-block-button'
 
+// Blocking now lives in a stylesheet and root attributes on `<html>`, neither
+// of which the shared `document.body.innerHTML = ''` teardown reaches. This is
+// the same pair the HMR dispose hook runs, so the tests tear down the way
+// production does.
+const teardownBlocking = () => {
+  cleanupContentScript()
+  clearAllBlocking()
+}
+
+const displayOf = (element: Element | null) => {
+  return element === null ? null : window.getComputedStyle(element).display
+}
+
+const blockedAttributeFor = (section: 'home' | 'explore' | 'live') => {
+  return `data-ttfb-${section}-blocked`
+}
+
 describe('content script', () => {
   afterEach(() => {
-    cleanupContentScript()
+    teardownBlocking()
   })
 
   it('hides home targets, mutes managed media, and restores them when disabled', () => {
@@ -46,8 +64,10 @@ describe('content script', () => {
 
     initContentScript()
 
-    expect(columnList!.style.display).toBe('none')
-    expect(columnList).toHaveAttribute('data-ttfb-home-hidden', 'true')
+    expect(displayOf(columnList)).toBe('none')
+    expect(document.documentElement).toHaveAttribute(
+      blockedAttributeFor('home'),
+    )
     expect(video!.muted).toBe(true)
     expect(video!.volume).toBe(0)
 
@@ -61,8 +81,10 @@ describe('content script', () => {
       },
     })
 
-    expect(columnList!.style.display).toBe('')
-    expect(columnList).not.toHaveAttribute('data-ttfb-home-hidden')
+    expect(displayOf(columnList)).toBe('block')
+    expect(document.documentElement).not.toHaveAttribute(
+      blockedAttributeFor('home'),
+    )
     expect(video!.muted).toBe(false)
     expect(video!.volume).toBe(0.75)
   })
@@ -101,10 +123,8 @@ describe('content script', () => {
 
     initContentScript()
 
-    expect(commentWrapper!.style.display).toBe('none')
-    expect(commentWrapper).toHaveAttribute('data-ttfb-home-hidden', 'true')
-    expect(commentSidebar!.style.display).toBe('none')
-    expect(commentSidebar).toHaveAttribute('data-ttfb-home-hidden', 'true')
+    expect(displayOf(commentWrapper)).toBe('none')
+    expect(displayOf(commentSidebar)).toBe('none')
 
     chromeMock.storage.local.set({
       [SETTINGS_STORAGE_KEY]: {
@@ -116,10 +136,8 @@ describe('content script', () => {
       },
     })
 
-    expect(commentWrapper!.style.display).toBe('')
-    expect(commentWrapper).not.toHaveAttribute('data-ttfb-home-hidden')
-    expect(commentSidebar!.style.display).toBe('')
-    expect(commentSidebar).not.toHaveAttribute('data-ttfb-home-hidden')
+    expect(displayOf(commentWrapper)).toBe('block')
+    expect(displayOf(commentSidebar)).toBe('block')
   })
 
   it('renders an overlay for a blocked explore page and persists overlay toggles', () => {
@@ -243,7 +261,7 @@ describe('content script', () => {
     const blockButton = document.getElementById(OVERLAY_BLOCK_BUTTON_ID)
 
     expect(columnList).not.toBeNull()
-    expect(columnList!.style.display).toBe('')
+    expect(displayOf(columnList)).toBe('block')
     expect(overlay).not.toBeNull()
     expect(overlay).toHaveClass('ttfb-overlay-available')
     expect(blockButton).toHaveTextContent('Block Home')
@@ -259,8 +277,10 @@ describe('content script', () => {
         overlay: true,
       },
     })
-    expect(columnList!.style.display).toBe('none')
-    expect(columnList).toHaveAttribute('data-ttfb-home-hidden', 'true')
+    expect(displayOf(columnList)).toBe('none')
+    expect(document.documentElement).toHaveAttribute(
+      blockedAttributeFor('home'),
+    )
     expect(document.getElementById(OVERLAY_ID)).toHaveClass(
       'ttfb-overlay-blocked',
     )
@@ -419,8 +439,10 @@ describe('content script', () => {
 
     initContentScript()
 
-    expect(liveContainer!.style.display).toBe('none')
-    expect(liveContainer).toHaveAttribute('data-ttfb-live-hidden', 'true')
+    expect(displayOf(liveContainer)).toBe('none')
+    expect(document.documentElement).toHaveAttribute(
+      blockedAttributeFor('live'),
+    )
     expect(video!.muted).toBe(true)
     expect(video!.volume).toBe(0)
 
@@ -434,8 +456,10 @@ describe('content script', () => {
       },
     })
 
-    expect(liveContainer!.style.display).toBe('')
-    expect(liveContainer).not.toHaveAttribute('data-ttfb-live-hidden')
+    expect(displayOf(liveContainer)).toBe('block')
+    expect(document.documentElement).not.toHaveAttribute(
+      blockedAttributeFor('live'),
+    )
     expect(video!.muted).toBe(false)
     expect(video!.volume).toBe(0.75)
   })
@@ -505,17 +529,22 @@ describe('content script', () => {
       )
       expect(deferredApplies).toHaveLength(1)
 
-      // The single sweep still has to cover every element in the burst.
-      vi.advanceTimersByTime(100)
-
+      // Hiding is a stylesheet gated on a root attribute that is already set,
+      // so the burst is hidden as it mounts. Nothing here has advanced timers:
+      // the pending sweep has not run, and does not need to for the elements
+      // to be hidden. That window used to be up to 100ms of visible feed.
       const inserted = document.querySelectorAll<HTMLElement>(
         '[class*="DivFeedNavigationContainer"]',
       )
       expect(inserted).toHaveLength(5)
       inserted.forEach(element => {
-        expect(element.style.display).toBe('none')
-        expect(element).toHaveAttribute('data-ttfb-home-hidden', 'true')
+        expect(displayOf(element)).toBe('none')
       })
+
+      // The sweep still runs; it is what re-applies muting to media that
+      // mounted with the burst.
+      vi.advanceTimersByTime(100)
+      expect(displayOf(inserted[0])).toBe('none')
     } finally {
       vi.useRealTimers()
     }

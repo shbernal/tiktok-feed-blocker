@@ -1,9 +1,5 @@
 import { type PageSection } from '../shared/settings'
 
-export const HIDDEN_HOME_ATTR = 'data-ttfb-home-hidden'
-export const HIDDEN_EXPLORE_ATTR = 'data-ttfb-explore-hidden'
-export const HIDDEN_LIVE_ATTR = 'data-ttfb-live-hidden'
-
 const HOME_COMMENT_SIDEBAR_SELECTORS = [
   '[class*="DivCommentSidebarTransitionWrapper"]',
   'section[class*="SectionCommentSidebarContainer"]',

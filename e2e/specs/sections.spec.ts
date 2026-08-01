@@ -30,6 +30,25 @@ const toggleOverlaySwitch = async (page: Page) => {
   await page.locator('#ttfb-feed-overlay .ttfb-slider').click()
 }
 
+// Blocking is a stylesheet gated on a root attribute, so `<html>` carries the
+// state that per-element `data-ttfb-*-hidden` attributes used to. Asserting it
+// alongside computed display separates "the extension turned blocking off"
+// from "the extension still thinks it is on but the CSS stopped matching".
+const expectSectionBlocked = async (
+  page: Page,
+  section: PageSection,
+  blocked: boolean,
+) => {
+  const attribute = `data-ttfb-${section}-blocked`
+  const html = page.locator('html')
+
+  if (blocked) {
+    await expect(html).toHaveAttribute(attribute)
+  } else {
+    await expect(html).not.toHaveAttribute(attribute)
+  }
+}
+
 const expectAvailableOverlay = async (page: Page, label: string) => {
   const overlay = page.locator('#ttfb-feed-overlay')
   const blockButton = page.locator('#ttfb-feed-overlay-block-button')
@@ -60,13 +79,9 @@ test('blocks and restores Home targets', async ({
   // The seek bar is never targeted directly; it goes away with its container.
   const homeVideoProgress = page.locator('#home-video-progress')
   await expect(homeTarget).toHaveCSS('display', 'none')
-  await expect(homeTarget).toHaveAttribute('data-ttfb-home-hidden', 'true')
+  await expectSectionBlocked(page, 'home', true)
   await expect(homeVideoProgress).toBeHidden()
   await expect(homeCommentSidebar).toHaveCSS('display', 'none')
-  await expect(homeCommentSidebar).toHaveAttribute(
-    'data-ttfb-home-hidden',
-    'true',
-  )
   await expect(page.locator('#ttfb-feed-overlay')).toBeVisible()
   await expect(page.locator('#ttfb-active-toggle-label')).toHaveText(
     'Block Home',
@@ -77,13 +92,9 @@ test('blocks and restores Home targets', async ({
 
   const blockButton = await expectAvailableOverlay(page, 'Block Home')
   await expect(homeTarget).toHaveCSS('display', 'block')
-  await expect(homeTarget).not.toHaveAttribute('data-ttfb-home-hidden', 'true')
+  await expectSectionBlocked(page, 'home', false)
   await expect(homeVideoProgress).toBeVisible()
   await expect(homeCommentSidebar).toHaveCSS('display', 'block')
-  await expect(homeCommentSidebar).not.toHaveAttribute(
-    'data-ttfb-home-hidden',
-    'true',
-  )
   await expectMediaState(page, '#home-video', { muted: false, volume: 0.75 })
   await expect.poll(readSettings).toMatchObject({
     active: false,
@@ -95,13 +106,9 @@ test('blocks and restores Home targets', async ({
   await blockButton.click()
 
   await expect(homeTarget).toHaveCSS('display', 'none')
-  await expect(homeTarget).toHaveAttribute('data-ttfb-home-hidden', 'true')
+  await expectSectionBlocked(page, 'home', true)
   await expect(homeVideoProgress).toBeHidden()
   await expect(homeCommentSidebar).toHaveCSS('display', 'none')
-  await expect(homeCommentSidebar).toHaveAttribute(
-    'data-ttfb-home-hidden',
-    'true',
-  )
   await expect(page.locator('#ttfb-feed-overlay')).toHaveClass(
     /ttfb-overlay-blocked/,
   )
@@ -128,7 +135,7 @@ test('blocks and restores Explore targets', async ({
   const mainContent = page.locator('#main-content-explore_page')
 
   await expect(mainContent).toHaveCSS('display', 'none')
-  await expect(mainContent).toHaveAttribute('data-ttfb-explore-hidden', 'true')
+  await expectSectionBlocked(page, 'explore', true)
   await expect(page.locator('#ttfb-feed-overlay')).toBeVisible()
   await expect(page.locator('#ttfb-active-toggle-label')).toHaveText(
     'Block Explore',
@@ -139,10 +146,7 @@ test('blocks and restores Explore targets', async ({
 
   const blockButton = await expectAvailableOverlay(page, 'Block Explore')
   await expect(mainContent).toHaveCSS('display', 'block')
-  await expect(mainContent).not.toHaveAttribute(
-    'data-ttfb-explore-hidden',
-    'true',
-  )
+  await expectSectionBlocked(page, 'explore', false)
   await expectMediaState(page, '#explore-video', {
     muted: false,
     volume: 0.75,
@@ -157,7 +161,7 @@ test('blocks and restores Explore targets', async ({
   await blockButton.click()
 
   await expect(mainContent).toHaveCSS('display', 'none')
-  await expect(mainContent).toHaveAttribute('data-ttfb-explore-hidden', 'true')
+  await expectSectionBlocked(page, 'explore', true)
   await expect(page.locator('#ttfb-feed-overlay')).toHaveClass(
     /ttfb-overlay-blocked/,
   )
@@ -183,7 +187,7 @@ test('blocks and restores Live targets', async ({
 
   const liveTarget = page.locator('#tiktok-live-main-container-id')
   await expect(liveTarget).toHaveCSS('display', 'none')
-  await expect(liveTarget).toHaveAttribute('data-ttfb-live-hidden', 'true')
+  await expectSectionBlocked(page, 'live', true)
   await expect(page.locator('#ttfb-feed-overlay')).toBeVisible()
   await expect(page.locator('#ttfb-active-toggle-label')).toHaveText(
     'Block Live',
@@ -195,7 +199,7 @@ test('blocks and restores Live targets', async ({
 
   const blockButton = await expectAvailableOverlay(page, 'Block Live')
   await expect(liveTarget).toHaveCSS('display', 'block')
-  await expect(liveTarget).not.toHaveAttribute('data-ttfb-live-hidden', 'true')
+  await expectSectionBlocked(page, 'live', false)
   await expectMediaState(page, '#live-video', { muted: false, volume: 0.75 })
   await expectMediaState(page, '#live-audio', { muted: false, volume: 0.75 })
   await expect.poll(readSettings).toMatchObject({
@@ -208,7 +212,7 @@ test('blocks and restores Live targets', async ({
   await blockButton.click()
 
   await expect(liveTarget).toHaveCSS('display', 'none')
-  await expect(liveTarget).toHaveAttribute('data-ttfb-live-hidden', 'true')
+  await expectSectionBlocked(page, 'live', true)
   await expect(page.locator('#ttfb-feed-overlay')).toHaveClass(
     /ttfb-overlay-blocked/,
   )

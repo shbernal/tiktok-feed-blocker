@@ -1,5 +1,3 @@
-import { isLivePage } from './selectors'
-
 // The three attributes are written together and read together: restore bails
 // unless all three are present, so a partial write would strand the element in
 // a muted state with no way back.
@@ -34,14 +32,24 @@ const restoreManagedMedia = (media: HTMLMediaElement) => {
   media.removeAttribute(MEDIA_PREVIOUS_PAUSED_ATTR)
 }
 
+// Restore queries the bookkeeping attribute rather than `video, audio`. Only
+// media this extension muted ever carries it, so the common case — a sweep
+// where nothing is muted — matches nothing instead of walking every player on
+// the page.
 export const restoreMediaInContainers = (containers: Element[]) => {
   containers.forEach(container => {
     container
-      .querySelectorAll<HTMLMediaElement>('video, audio')
+      .querySelectorAll<HTMLMediaElement>(`[${MEDIA_PREVIOUS_MUTED_ATTR}]`)
       .forEach(media => {
         restoreManagedMedia(media)
       })
   })
+}
+
+// Teardown needs a restore that does not depend on the containers still being
+// in the DOM or the current page section still being detectable.
+export const restoreAllManagedMedia = () => {
+  restoreMediaInContainers([document.documentElement])
 }
 
 export const muteMediaInContainers = (containers: Element[]) => {
@@ -61,20 +69,4 @@ export const muteMediaInContainers = (containers: Element[]) => {
         }
       })
   })
-}
-
-// Live pages mute document-wide rather than per hidden container: the player
-// can sit outside the container the live selectors match. `querySelectorAll`
-// skips the container itself, which is harmless here because media are always
-// descendants of `documentElement`.
-const livePageMediaContainers = () => {
-  return isLivePage() ? [document.documentElement] : []
-}
-
-export const muteMediaInLivePages = () => {
-  muteMediaInContainers(livePageMediaContainers())
-}
-
-export const restoreMediaInLivePages = () => {
-  restoreMediaInContainers(livePageMediaContainers())
 }
