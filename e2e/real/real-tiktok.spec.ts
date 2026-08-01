@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures/realExtension'
 import type { ExtensionSettings, PageSection } from '../../src/shared/settings'
+import { SELECTORS } from '../../src/content/selectors'
 import { expectVisibleOverlayProof } from './overlayProof'
 
 type RealTikTokCase = {
@@ -49,6 +50,20 @@ const smokeCases: RealTikTokCase[] = [
     overlayLabel: 'Block Live',
   },
 ]
+
+// The selectors each page's blocking actually rests on, confirmed to match on
+// real TikTok. A rename should fail here loudly rather than quietly degrade
+// blocking into a no-op that every fixture test still passes.
+//
+// Two selectors are deliberately absent. `progressIndicator` matches nothing on
+// real Home and is kept only as a conservative fallback, so requiring a match
+// would fail on every run. `homeCommentSidebar` exists only while the sidebar
+// is open, which this run never does.
+const loadBearingSelectors: Record<PageSection, string[]> = {
+  home: [SELECTORS.columnListContainer, SELECTORS.feedNavigationContainer],
+  explore: [SELECTORS.mainContent],
+  live: [SELECTORS.livePageMainContainer],
+}
 
 const gotoRealTikTokPage = async (page: Page, url: string) => {
   await page.goto(url, {
@@ -149,6 +164,34 @@ test.describe('real TikTok selector smoke', () => {
       await expect
         .poll(readSettings, { timeout: smokeTimeout })
         .toMatchObject(settingsWithOnly(smokeCase.section))
+    })
+  }
+})
+
+test.describe('real TikTok selector coverage', () => {
+  test.skip(
+    process.env.RUN_REAL_TIKTOK_E2E !== '1',
+    'Set RUN_REAL_TIKTOK_E2E=1 to run real TikTok smoke tests.',
+  )
+
+  for (const smokeCase of smokeCases) {
+    test(`real ${smokeCase.section} selectors still match`, async ({
+      newRealTikTokPage,
+    }) => {
+      test.skip(
+        !getRequestedSections().has(smokeCase.section),
+        `Skipping ${smokeCase.section}; not listed in TIKTOK_REAL_SECTIONS.`,
+      )
+
+      const page = await newRealTikTokPage()
+      await gotoRealTikTokPage(page, smokeCase.url)
+
+      for (const selector of loadBearingSelectors[smokeCase.section]) {
+        await expect(
+          page.locator(selector),
+          `${smokeCase.section}: \`${selector}\` matched nothing on real TikTok`,
+        ).not.toHaveCount(0, { timeout: smokeTimeout })
+      }
     })
   }
 })

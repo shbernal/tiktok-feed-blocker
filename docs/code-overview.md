@@ -151,6 +151,13 @@ Behavior across those modules:
 DOM changes should remain idempotent. Clear/restore paths need to undo every
 managed hide or media mutation introduced by apply paths.
 
+Prefer ids over class selectors in `selectors.ts`. TikTok interpolates a
+per-build hash between styled-component name segments and rotates its
+emotion-style class names per build, so a `[class*=...]` selector may name only
+one segment and a bare hashed token is never a durable hook. Real-site coverage
+for the selectors each section depends on lives in
+[Real TikTok E2E](./real-tiktok-e2e.md).
+
 Teardown has to cancel deferred work too, not just detach listeners. The
 observer defers the re-apply by 100ms; `cleanupContentScript` clears the pending
 timer, because one firing after teardown would re-apply blocking to elements

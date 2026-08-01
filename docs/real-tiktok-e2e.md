@@ -105,6 +105,30 @@ Run the real smoke suite with the imported profile:
 TIKTOK_REAL_PROFILE_DIR=.e2e/tiktok-injected-profile pnpm e2e:real
 ```
 
+## Selector Coverage Checks
+
+`e2e/real/real-tiktok.spec.ts` holds two describe blocks. The smoke block drives
+blocking end to end. The coverage block does something narrower and asserts that
+every selector a page's blocking rests on still matches at least one element on
+the live site.
+
+This exists because the fixture suite cannot see selector drift. A selector that
+TikTok renamed keeps passing against a fixture written to match it, and blocking
+degrades into a silent no-op with a green suite. The coverage block is the only
+place a rename fails loudly, and the failure message names the selector.
+
+`loadBearingSelectors` in that file is the list. Add an entry whenever a new
+selector becomes something a section depends on. Two selectors are deliberately
+excluded:
+
+- `progressIndicator` matches nothing on real Home. It is kept in `SELECTORS` as
+  a conservative fallback, so requiring a match would fail every run.
+- `homeCommentSidebar` exists only while the comment sidebar is open, which the
+  real run never does.
+
+Both exclusions are load-bearing knowledge, not oversights. Removing either from
+the exclusion list turns a passing suite red without anything being broken.
+
 ## Overlay Screenshot Proof
 
 Real TikTok overlay checks attach proof artifacts for every overlay state they

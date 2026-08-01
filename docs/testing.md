@@ -53,6 +53,16 @@ fixtures. The fixtures serve TikTok URLs from deterministic HTML, so the content
 script still sees `https://www.tiktok.com/...` without depending on the real
 site or a TikTok account.
 
+A fixture is only worth what it resembles. Two selectors passed here for a long
+time while matching nothing in production, because the fixtures had been written
+to fit the selectors rather than the page: one split an id and a class across two
+elements that are a single node on real TikTok, and the other omitted the real
+container id entirely. When adding or editing a fixture, copy the real element's
+shape — id, class list, and nesting — from a live page rather than writing the
+markup the selector expects. Class names carry a per-build hash on real TikTok,
+so keep the hashes in the fixture too; they are what makes a bad selector fail
+here instead of in the wild.
+
 Real-site smoke tests use `playwright.real.config.ts` and `e2e/real/`. These
 tests are intentionally separate from the default E2E suite because they depend
 on TikTok uptime, account state, regional UI, CAPTCHA/2FA prompts, current DOM
