@@ -63,6 +63,7 @@ let settings: ExtensionSettings = {
 }
 let observer: MutationObserver | null = null
 let intervalId: number | null = null
+const pendingApplyTimeouts = new Set<number>()
 let lastShortcutToggleAt = 0
 // Mirrored from `chrome.commands` by the background script; until it lands the
 // manifest default keeps the fallback working.
@@ -722,6 +723,26 @@ const onStorageChanged: Parameters<
   applyCurrentSettings()
 }
 
+// Observer callbacks defer the re-apply so a burst of DOM insertions settles
+// first. The ids are tracked so teardown can cancel work that has not run yet —
+// otherwise a queued re-apply lands after cleanupContentScript and re-hides
+// elements clearAllBlocking just restored.
+const scheduleApplyCurrentSettings = () => {
+  const timeoutId = window.setTimeout(() => {
+    pendingApplyTimeouts.delete(timeoutId)
+    applyCurrentSettings()
+  }, 100)
+
+  pendingApplyTimeouts.add(timeoutId)
+}
+
+const cancelPendingApplyCurrentSettings = () => {
+  pendingApplyTimeouts.forEach(timeoutId => {
+    window.clearTimeout(timeoutId)
+  })
+  pendingApplyTimeouts.clear()
+}
+
 const setupObserver = () => {
   if (!document.body) {
     return
@@ -735,9 +756,7 @@ const setupObserver = () => {
 
       for (const node of mutation.addedNodes) {
         if (node.nodeType === Node.ELEMENT_NODE) {
-          setTimeout(() => {
-            applyCurrentSettings()
-          }, 100)
+          scheduleApplyCurrentSettings()
           return
         }
       }
@@ -807,6 +826,8 @@ export const cleanupContentScript = () => {
     window.clearInterval(intervalId)
     intervalId = null
   }
+
+  cancelPendingApplyCurrentSettings()
 }
 
 const startContentScript = () => {
