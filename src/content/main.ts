@@ -178,33 +178,20 @@ const muteMediaInContainers = (containers: Element[]) => {
 
 const isLivePage = () => window.location.pathname.startsWith('/live')
 
+// Live pages mute document-wide rather than per hidden container: the player
+// can sit outside the container the live selectors match. `querySelectorAll`
+// skips the container itself, which is harmless here because media are always
+// descendants of `documentElement`.
+const livePageMediaContainers = () => {
+  return isLivePage() ? [document.documentElement] : []
+}
+
 const muteMediaInLivePages = () => {
-  if (!isLivePage()) {
-    return
-  }
-
-  document.querySelectorAll<HTMLMediaElement>('video, audio').forEach(media => {
-    if (!media.hasAttribute(MEDIA_PREVIOUS_MUTED_ATTR)) {
-      media.setAttribute(MEDIA_PREVIOUS_MUTED_ATTR, String(media.muted))
-      media.setAttribute(MEDIA_PREVIOUS_VOLUME_ATTR, String(media.volume))
-      media.setAttribute(MEDIA_PREVIOUS_PAUSED_ATTR, String(media.paused))
-    }
-
-    if (!media.muted || media.volume !== 0) {
-      media.muted = true
-      media.volume = 0
-    }
-  })
+  muteMediaInContainers(livePageMediaContainers())
 }
 
 const restoreMediaInLivePages = () => {
-  if (!isLivePage()) {
-    return
-  }
-
-  document.querySelectorAll<HTMLMediaElement>('video, audio').forEach(media => {
-    restoreManagedMedia(media)
-  })
+  restoreMediaInContainers(livePageMediaContainers())
 }
 
 const ensureOverlayStyles = () => {
