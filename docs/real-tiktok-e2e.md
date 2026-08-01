@@ -148,6 +148,10 @@ state before treating the iteration as done.
 
 ## Manual Inspection Commands
 
+`pnpm e2e:real:open --help` lists these options and their defaults. Prefer it
+over `pnpm e2e:real:open:extension --help`, which runs a full build before it
+can print anything.
+
 Open the default profile without loading the extension:
 
 ```bash

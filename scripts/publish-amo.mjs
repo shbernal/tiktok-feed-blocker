@@ -3,16 +3,13 @@
 // listed-channel review state and is known to exit non-zero on submissions that
 // actually succeeded, which is not something a release job can be built on.
 //
-// Usage:
-//   node scripts/publish-amo.mjs            # submit
-//   node scripts/publish-amo.mjs --dry-run  # resolve and print, call nothing
-//   node scripts/publish-amo.mjs --check    # verify credentials only
-//   node scripts/publish-amo.mjs --validate-only  # run AMO's validator, submit
-//                                                 # nothing
+//
+// Run `pnpm publish:amo --help` for the flags and the environment it reads.
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import crypto from 'node:crypto'
+import { printHelpAndExit } from './help.mjs'
 
 const API = 'https://addons.mozilla.org/api/v5'
 const GUID = 'tiktok-feed-blocker@shbernal.github.io'
@@ -37,6 +34,36 @@ const read = file => fs.readFileSync(path.resolve(root, file), 'utf8')
 const readJson = file => JSON.parse(read(file))
 
 const { version } = readJson('package.json')
+
+printHelpAndExit(`
+Usage: pnpm publish:amo [--dry-run | --check | --validate-only] [--help]
+
+Submits the built Firefox package to addons.mozilla.org against API v5: uploads
+the package, waits for server-side validation, creates the version, then
+attaches the source archive. A listed submission is queued for human review, so
+a successful run ends with the add-on nominated, not public.
+
+Flags
+  --dry-run        resolve the listing, approval notes, and file paths and
+                   print them; calls nothing
+  --check          verify the API credentials and exit
+  --validate-only  upload through AMO's real validator without creating a
+                   version; nothing is submitted and the add-on id is not
+                   claimed
+  --help, -h       show this text
+
+Environment
+  MOZILLA_ADDON_JWT_ISSUER  AMO API key (required, except for --dry-run)
+  MOZILLA_ADDON_JWT_SECRET  AMO API secret (required, except for --dry-run)
+  AMO_PACKAGE               package to submit
+                            (default: release/tiktok-feed-blocker-firefox-${version}.zip)
+  AMO_SOURCE                source archive to attach
+                            (default: release/tiktok-feed-blocker-source-${version}.zip)
+
+Both defaults are produced by pnpm package:firefox and pnpm package:source.
+
+See docs/ci-release-flow.md and docs/firefox-amo.md.
+`)
 
 const packagePath = path.resolve(
   root,

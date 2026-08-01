@@ -91,6 +91,10 @@ Useful environment variables:
 - `FIREFOX_VALIDATE_HEADED=1` shows the browser instead of running headless.
 - `FIREFOX_VALIDATE_PORT` moves the remote-agent port off `9333`.
 
+`node scripts/validate-firefox.mjs --help` prints the same list with its
+defaults. Going through `pnpm validate:firefox --help` also works, but builds
+the Firefox target first.
+
 ### Zen
 
 `FIREFOX_BINARY=/usr/bin/zen-browser pnpm exec node scripts/validate-firefox.mjs`

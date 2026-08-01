@@ -228,6 +228,8 @@ List the AMO environment secrets, by name only:
 gh secret list --env addons-mozilla-org --repo shbernal/tiktok-feed-blocker
 ```
 
+`pnpm publish:amo --help` lists every flag and the environment it reads.
+
 Check the AMO credentials, or preview what a submission would send, without
 uploading anything:
 

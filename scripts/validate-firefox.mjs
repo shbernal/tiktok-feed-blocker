@@ -7,6 +7,29 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { spawn } from 'node:child_process'
+import { printHelpAndExit } from './help.mjs'
+
+printHelpAndExit(`
+Usage: pnpm validate:firefox [--help]
+
+Drives the built Firefox extension in a real Firefox over WebDriver BiDi
+against real TikTok pages, and checks the popup, the blocked overlay, hidden
+sections, muted media, the toggle shortcut, and restore behavior. Writes
+screenshots and validation.json under test-results/firefox/<binary>, and exits
+non-zero if any check fails. Requires a dist-firefox/ build.
+
+Environment
+  FIREFOX_BINARY           Firefox-family binary to drive
+                           (default: /usr/bin/firefox); set this to validate
+                           Zen or another fork
+  FIREFOX_VALIDATE_HEADED  set to 1 to watch the run; headless otherwise
+  FIREFOX_VALIDATE_PORT    remote debugging port (default: 9333)
+
+Note: pnpm validate:firefox builds dist-firefox/ before this script runs, so
+run node scripts/validate-firefox.mjs --help to read this without building.
+
+See docs/build-targets.md.
+`)
 
 const extensionId = 'tiktok-feed-blocker@shbernal.github.io'
 // Pinning the internal uuid in the profile makes the popup URL knowable before
