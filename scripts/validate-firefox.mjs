@@ -261,24 +261,132 @@ const pressToggleShortcut = async (session, context) => {
   })
 }
 
-// Serialized in the page, so this has to be a self-contained expression.
-const pageStateExpression = `JSON.stringify((() => {
-  const overlay = document.getElementById('ttfb-feed-overlay')
-  const managed = Array.from(
-    document.querySelectorAll('[data-ttfb-home-hidden], [data-ttfb-explore-hidden], [data-ttfb-live-hidden]'),
+// The popup's full control set, in render order. Asserting the names rather
+// than a count means adding or renaming a control fails here with the label in
+// the message instead of an off-by-one.
+const popupControlLabels = [
+  'Block all pages',
+  'Block Home',
+  'Block Explore',
+  'Block Live',
+  'Show overlay',
+]
+
+// Hiding is a stylesheet gated on a root attribute, so the selectors a section
+// hides are read out of the built sheet rather than restated here.
+// `src/content/blocking.css` is generated from `buildBlockingStyleSheet` and
+// guarded by tests/blocking-css.test.ts, so this cannot drift from what
+// blocking actually hides.
+const readHiddenSelectors = () => {
+  const css = fs.readFileSync(
+    path.join(extensionPath, 'src', 'content', 'blocking.css'),
+    'utf8',
   )
+  const table = { home: [], explore: [], live: [] }
+
+  for (const block of css.split('}')) {
+    // `displayNoneRule` joins selectors with `,\n`, so there is exactly one per
+    // line. That is what makes this safe to split when a selector carries its
+    // own comma, as `homeCommentSidebar`'s `:is(a, b)` does.
+    for (const line of block.split('{')[0].split('\n')) {
+      const match =
+        /^html\[data-ttfb-(home|explore|live)-blocked\]\s+(.+?),?$/.exec(
+          line.trim(),
+        )
+      if (match) {
+        table[match[1]].push(match[2])
+      }
+    }
+  }
+
+  for (const [section, selectors] of Object.entries(table)) {
+    if (selectors.length === 0) {
+      throw new Error(
+        `No hidden selectors parsed for ${section} from the built blocking.css`,
+      )
+    }
+  }
+
+  return table
+}
+
+// Serialized in the page, so this has to be a self-contained expression.
+//
+// Blocking leaves no per-element bookkeeping to count any more, so proving it
+// took hold means reading `<html>` for the section attribute and the *computed*
+// display of the selectors that section hides. `ready` is part of the proof,
+// not colour: while the root lacks it the pre-settings rule hides every target,
+// so "hidden" without "ready" is a blank page, not a blocked one.
+const buildPageStateExpression = hiddenSelectors => `JSON.stringify((() => {
+  const overlay = document.getElementById('ttfb-feed-overlay')
   const media = Array.from(document.querySelectorAll('video, audio'))
+  const hidden = ${JSON.stringify(hiddenSelectors)}
+  const sections = {}
+
+  for (const [section, selectors] of Object.entries(hidden)) {
+    const targets = selectors.flatMap(selector =>
+      Array.from(document.querySelectorAll(selector)).map(element => ({
+        selector,
+        display: getComputedStyle(element).display,
+      })),
+    )
+    sections[section] = {
+      blocked: document.documentElement.hasAttribute('data-ttfb-' + section + '-blocked'),
+      matched: targets.length,
+      matchedSelectors: Array.from(new Set(targets.map(target => target.selector))),
+      visibleTargets: targets.filter(target => target.display !== 'none').length,
+    }
+  }
+
   return {
     href: location.href,
+    ready: document.documentElement.hasAttribute('data-ttfb-ready'),
     overlayState: overlay ? overlay.dataset.ttfbState ?? null : null,
     overlayText: overlay ? overlay.innerText.replace(/\\s+/g, ' ').trim() : null,
-    hiddenCount: managed.length,
-    allHiddenElementsDisplayNone: managed.every(el => el.style.display === 'none'),
+    sections,
     mediaCount: media.length,
     managedMediaCount: media.filter(el => el.hasAttribute('data-ttfb-previous-muted')).length,
     unmutedMediaCount: media.filter(el => !el.muted).length,
   }
 })())`
+
+// A section counts as hidden only if the extension has decided (`ready`), the
+// attribute is set, and every target actually on the page computes to
+// `display: none`. Requiring at least one match is what keeps this from passing
+// green on a page where TikTok renamed the selector out from under it.
+const sectionHidden = (state, section) => {
+  const current = state.sections[section]
+  return (
+    state.ready &&
+    current.blocked &&
+    current.matched > 0 &&
+    current.visibleTargets === 0
+  )
+}
+
+const sectionRestored = (state, section) => {
+  const current = state.sections[section]
+  return (
+    state.ready &&
+    !current.blocked &&
+    current.matched > 0 &&
+    current.visibleTargets === current.matched
+  )
+}
+
+const describeSection = (state, section) => {
+  const current = state.sections[section]
+  const matched =
+    current.matchedSelectors.length > 0
+      ? current.matchedSelectors.join(', ')
+      : 'no selector matched'
+
+  return (
+    `ready=${state.ready}, ${section}-blocked=${current.blocked}, ` +
+    `${current.matched - current.visibleTargets}/${current.matched} targets hidden ` +
+    `(${matched})`
+  )
+}
 
 const readStorageExpression = `new Promise(resolve => {
   chrome.storage.local.get(null, items => resolve(JSON.stringify(items)))
@@ -293,6 +401,8 @@ if (!fs.existsSync(path.join(extensionPath, 'manifest.json'))) {
     `Missing built extension at ${extensionPath}. Run pnpm build:firefox first.`,
   )
 }
+
+const pageStateExpression = buildPageStateExpression(readHiddenSelectors())
 
 const profile = createProfile()
 const firefox = spawn(
@@ -351,11 +461,15 @@ try {
       session,
       popupContext,
       `JSON.stringify(Array.from(document.querySelectorAll('input[type=checkbox]')).map(input => [input.getAttribute('aria-label'), input.checked]))`,
-      controls => controls.length === 4,
+      controls => controls.length === popupControlLabels.length,
     )
+    const renderedLabels = popupControls.map(([label]) => label)
     check(
       'popup renders every section control',
-      popupControls.length === 4,
+      renderedLabels.length === popupControlLabels.length &&
+        popupControlLabels.every(
+          (label, index) => renderedLabels[index] === label,
+        ),
       JSON.stringify(popupControls),
     )
 
@@ -393,7 +507,9 @@ try {
       session,
       tiktokContext,
       pageStateExpression,
-      current => current.overlayState === 'blocked' && current.hiddenCount > 0,
+      current =>
+        current.overlayState === 'blocked' &&
+        sectionHidden(current, section.key),
     )
     check(
       `${section.label}: blocked overlay renders by default`,
@@ -403,8 +519,8 @@ try {
     )
     check(
       `${section.label}: page content is hidden`,
-      state.hiddenCount > 0 && state.allHiddenElementsDisplayNone,
-      `${state.hiddenCount} managed elements`,
+      sectionHidden(state, section.key),
+      describeSection(state, section.key),
     )
     check(
       `${section.label}: media is muted`,
@@ -481,12 +597,13 @@ try {
     session,
     tiktokContext,
     pageStateExpression,
-    state => state.overlayState === 'available' && state.hiddenCount === 0,
+    state =>
+      state.overlayState === 'available' && sectionRestored(state, 'home'),
   )
   check(
     'disabling Home restores hidden elements',
-    restored.hiddenCount === 0,
-    `${restored.hiddenCount} managed elements left`,
+    sectionRestored(restored, 'home'),
+    describeSection(restored, 'home'),
   )
   check(
     'disabling Home restores media state',
@@ -508,12 +625,13 @@ try {
     session,
     tiktokContext,
     pageStateExpression,
-    state => state.overlayState === 'blocked',
+    state => state.overlayState === 'blocked' && sectionHidden(state, 'home'),
   )
   check(
     'Ctrl+Shift+8 re-blocks the current TikTok page',
-    afterShortcut.overlayState === 'blocked' && afterShortcut.hiddenCount > 0,
-    afterShortcut.overlayText,
+    afterShortcut.overlayState === 'blocked' &&
+      sectionHidden(afterShortcut, 'home'),
+    `${afterShortcut.overlayText} — ${describeSection(afterShortcut, 'home')}`,
   )
 
   if (popupContext) {

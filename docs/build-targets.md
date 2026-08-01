@@ -85,6 +85,21 @@ disabled; and `Ctrl+Shift+8` re-blocking the current page.
 The checks run against logged-out TikTok, which reaches all three sections, so
 no authenticated profile is needed.
 
+Since hiding moved to a stylesheet gated on a root attribute, there is no
+per-element bookkeeping left to count. The run proves a section is hidden by
+reading `<html>` for `data-ttfb-<section>-blocked` and the _computed_ display of
+every selector that section hides, and it requires `data-ttfb-ready` alongside
+them — without the ready attribute the pre-settings rule hides everything, so
+"hidden" on its own would report a blank page as a blocked one. It also requires
+at least one selector to match, which is what keeps the check from going green
+against a page TikTok has renamed out from under it.
+
+Those selectors are parsed out of the built `src/content/blocking.css` rather
+than restated in the script. That file is generated from
+`buildBlockingStyleSheet` and guarded by `tests/blocking-css.test.ts`, so the
+validator cannot drift from what blocking actually hides — adding a selector to
+a section puts it under validation with no change here.
+
 Useful environment variables:
 
 - `FIREFOX_BINARY` points the run at another Gecko browser.
