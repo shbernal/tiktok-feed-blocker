@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getChromeMock } from '../test/chrome'
+import { TOGGLE_SHORTCUT_STORAGE_KEY } from '../shared/shortcut'
 
 const loadBackgroundScript = async () => {
   vi.resetModules()
@@ -41,6 +42,38 @@ describe('background command handling', () => {
       },
       expect.any(Function),
     )
+  })
+
+  it('mirrors the resolved shortcut into storage for the content script', async () => {
+    const chromeMock = getChromeMock()
+    chromeMock.commands.getAll.mockImplementation(callback => {
+      callback([
+        {
+          name: 'toggle-current-page-block',
+          description: 'Toggle blocking for the current TikTok page',
+          shortcut: 'Command+Shift+8',
+        },
+      ])
+    })
+
+    await loadBackgroundScript()
+
+    expect(chromeMock.storage.local.set).toHaveBeenCalledWith({
+      [TOGGLE_SHORTCUT_STORAGE_KEY]: 'Command+Shift+8',
+    })
+  })
+
+  it('mirrors an empty string when the command is unbound', async () => {
+    const chromeMock = getChromeMock()
+    chromeMock.commands.getAll.mockImplementation(callback => {
+      callback([])
+    })
+
+    await loadBackgroundScript()
+
+    expect(chromeMock.storage.local.set).toHaveBeenCalledWith({
+      [TOGGLE_SHORTCUT_STORAGE_KEY]: '',
+    })
   })
 
   it('ignores unrelated commands', async () => {

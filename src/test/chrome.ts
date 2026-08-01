@@ -99,6 +99,17 @@ export const createChromeMock = () => {
   return {
     commands: {
       onCommand: command,
+      getAll: vi.fn(
+        (callback: (commands: chrome.commands.Command[]) => void) => {
+          callback([
+            {
+              name: 'toggle-current-page-block',
+              description: 'Toggle blocking for the current TikTok page',
+              shortcut: 'Ctrl+Shift+8',
+            },
+          ])
+        },
+      ),
     },
     runtime: {
       lastError: undefined,

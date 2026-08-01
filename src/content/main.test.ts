@@ -1,6 +1,7 @@
 import { fireEvent } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SETTINGS_STORAGE_KEY } from '../shared/settings'
+import { TOGGLE_SHORTCUT_STORAGE_KEY } from '../shared/shortcut'
 import { getChromeMock } from '../test/chrome'
 import { cleanupContentScript, initContentScript } from './main'
 
@@ -259,6 +260,54 @@ describe('content script', () => {
     fireEvent.keyDown(document.body, {
       code: 'Digit8',
       ctrlKey: true,
+      shiftKey: true,
+    })
+
+    expect(chromeMock.storage.local.set).toHaveBeenLastCalledWith({
+      [SETTINGS_STORAGE_KEY]: {
+        active: false,
+        home: false,
+        explore: false,
+        live: false,
+      },
+    })
+  })
+
+  it('answers the mirrored binding after the command is rebound', () => {
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: true,
+        explore: false,
+        live: false,
+      },
+      [TOGGLE_SHORTCUT_STORAGE_KEY]: 'Command+Shift+8',
+    })
+    document.body.innerHTML = '<div id="column-list-container"></div>'
+
+    initContentScript()
+
+    // The old hardcoded keys must no longer toggle once the real binding is
+    // something else.
+    fireEvent.keyDown(document.body, {
+      code: 'Digit8',
+      ctrlKey: true,
+      shiftKey: true,
+    })
+
+    expect(chromeMock.storage.local.set).toHaveBeenLastCalledWith({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: true,
+        explore: false,
+        live: false,
+      },
+    })
+
+    fireEvent.keyDown(document.body, {
+      code: 'Digit8',
+      metaKey: true,
       shiftKey: true,
     })
 

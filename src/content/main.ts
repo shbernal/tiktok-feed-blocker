@@ -7,6 +7,12 @@ import {
   syncActiveWithPages,
   type ExtensionSettings,
 } from '../shared/settings'
+import {
+  matchesShortcut,
+  type ParsedShortcut,
+  resolveToggleShortcut,
+  TOGGLE_SHORTCUT_STORAGE_KEY,
+} from '../shared/shortcut'
 
 const OVERLAY_ID = 'ttfb-feed-overlay'
 const OVERLAY_STYLE_ID = 'ttfb-feed-overlay-style'
@@ -58,6 +64,9 @@ let settings: ExtensionSettings = {
 let observer: MutationObserver | null = null
 let intervalId: number | null = null
 let lastShortcutToggleAt = 0
+// Mirrored from `chrome.commands` by the background script; until it lands the
+// manifest default keeps the fallback working.
+let toggleShortcut: ParsedShortcut | null = resolveToggleShortcut(undefined)
 
 const isUpdateSettingsMessage = (
   message: unknown,
@@ -580,13 +589,7 @@ const isTextInputTarget = (target: EventTarget | null) => {
 }
 
 const isToggleShortcut = (event: KeyboardEvent) => {
-  return (
-    event.ctrlKey &&
-    event.shiftKey &&
-    !event.altKey &&
-    !event.metaKey &&
-    event.code === 'Digit8'
-  )
+  return matchesShortcut(event, toggleShortcut)
 }
 
 const onKeyDown = (event: KeyboardEvent) => {
@@ -714,6 +717,11 @@ const onStorageChanged: Parameters<
     return
   }
 
+  const shortcutChange = changes[TOGGLE_SHORTCUT_STORAGE_KEY]
+  if (shortcutChange) {
+    toggleShortcut = resolveToggleShortcut(shortcutChange.newValue)
+  }
+
   const settingsChange = changes[SETTINGS_STORAGE_KEY]
   if (!settingsChange) {
     return
@@ -763,11 +771,18 @@ const startBlockingLoop = () => {
 
 export const initContentScript = () => {
   chrome.storage.local.get(
-    [SETTINGS_STORAGE_KEY, LEGACY_ACTIVE_STORAGE_KEY],
+    [
+      SETTINGS_STORAGE_KEY,
+      LEGACY_ACTIVE_STORAGE_KEY,
+      TOGGLE_SHORTCUT_STORAGE_KEY,
+    ],
     result => {
       settings = deriveSettingsFromStorage(
         result[SETTINGS_STORAGE_KEY],
         result[LEGACY_ACTIVE_STORAGE_KEY],
+      )
+      toggleShortcut = resolveToggleShortcut(
+        result[TOGGLE_SHORTCUT_STORAGE_KEY],
       )
       saveSettings(settings)
       applyCurrentSettings()
