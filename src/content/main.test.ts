@@ -469,4 +469,55 @@ describe('content script', () => {
 
     expect(chromeMock.storage.local.set).toHaveBeenCalledTimes(1)
   })
+
+  it('coalesces a burst of DOM insertions into one deferred re-apply', async () => {
+    const chromeMock = getChromeMock()
+    chromeMock.storage.local.seed({
+      [SETTINGS_STORAGE_KEY]: {
+        active: true,
+        home: true,
+        explore: false,
+        live: false,
+        overlay: true,
+      },
+    })
+    document.body.innerHTML = '<div id="column-list-container"></div>'
+
+    initContentScript()
+
+    vi.useFakeTimers()
+
+    try {
+      const scheduled = vi.spyOn(window, 'setTimeout')
+
+      // Separate observer deliveries, not one batch: awaiting between the
+      // insertions lets each MutationObserver callback run on its own, which is
+      // what a scrolling feed produces and what used to schedule a timer each.
+      for (let index = 0; index < 5; index += 1) {
+        const inserted = document.createElement('nav')
+        inserted.className = `DivFeedNavigationContainer-fixture-${index}`
+        document.body.appendChild(inserted)
+        await Promise.resolve()
+      }
+
+      const deferredApplies = scheduled.mock.calls.filter(
+        ([, delay]) => delay === 100,
+      )
+      expect(deferredApplies).toHaveLength(1)
+
+      // The single sweep still has to cover every element in the burst.
+      vi.advanceTimersByTime(100)
+
+      const inserted = document.querySelectorAll<HTMLElement>(
+        '[class*="DivFeedNavigationContainer"]',
+      )
+      expect(inserted).toHaveLength(5)
+      inserted.forEach(element => {
+        expect(element.style.display).toBe('none')
+        expect(element).toHaveAttribute('data-ttfb-home-hidden', 'true')
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

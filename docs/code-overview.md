@@ -152,9 +152,16 @@ DOM changes should remain idempotent. Clear/restore paths need to undo every
 managed hide or media mutation introduced by apply paths.
 
 Teardown has to cancel deferred work too, not just detach listeners. The
-observer defers each re-apply by 100ms; `cleanupContentScript` clears those
-pending timers, because one firing after teardown would re-apply blocking to
-elements `clearAllBlocking` had just restored.
+observer defers the re-apply by 100ms; `cleanupContentScript` clears the pending
+timer, because one firing after teardown would re-apply blocking to elements
+`clearAllBlocking` had just restored.
+
+Only one deferred re-apply is ever queued. A scrolling feed fires observer
+callbacks continuously and every sweep is a full-document pass, so mutations
+arriving while a sweep is already scheduled need no timer of their own — the
+pending sweep re-reads the whole document anyway. `applyCurrentSettings`
+resolves the current page section once and hands it to `renderFeedOverlay` for
+the same reason: detection walks the document, and both needed the answer.
 
 ## Runtime Boundaries
 

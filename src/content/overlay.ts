@@ -1,5 +1,5 @@
-import { type ExtensionSettings } from '../shared/settings'
-import { getCurrentPageSection, getPageSectionLabel } from './selectors'
+import { type ExtensionSettings, type PageSection } from '../shared/settings'
+import { getPageSectionLabel } from './selectors'
 
 export const OVERLAY_ID = 'ttfb-feed-overlay'
 export const OVERLAY_STYLE_ID = 'ttfb-feed-overlay-style'
@@ -253,14 +253,17 @@ const handleOverlayBlock = () => {
   overlayHandlers?.onBlock()
 }
 
+// The page section is resolved by the caller and passed in: detecting it walks
+// the document, and applyCurrentSettings already needs the answer to decide
+// whether to render at all.
 export const renderFeedOverlay = (
   settings: ExtensionSettings,
   handlers: OverlayHandlers,
+  currentPageSection: PageSection,
 ) => {
   overlayHandlers = handlers
 
-  const currentPageSection = getCurrentPageSection()
-  if (!document.body || !currentPageSection) {
+  if (!document.body) {
     removeFeedOverlay()
     return
   }

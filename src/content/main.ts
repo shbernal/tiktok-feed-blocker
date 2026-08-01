@@ -40,7 +40,7 @@ let settings: ExtensionSettings = {
 }
 let observer: MutationObserver | null = null
 let intervalId: number | null = null
-const pendingApplyTimeouts = new Set<number>()
+let pendingApplyTimeout: number | null = null
 let lastShortcutToggleAt = 0
 // Mirrored from `chrome.commands` by the background script; until it lands the
 // manifest default keeps the fallback working.
@@ -198,23 +198,30 @@ const onStorageChanged: Parameters<
 }
 
 // Observer callbacks defer the re-apply so a burst of DOM insertions settles
-// first. The ids are tracked so teardown can cancel work that has not run yet —
-// otherwise a queued re-apply lands after cleanupContentScript and re-hides
-// elements clearAllBlocking just restored.
+// first, and only one re-apply is ever in flight: a scrolling feed mutates
+// constantly, and each sweep is a full-document pass. Later mutations in the
+// window need no timer of their own because the pending sweep re-reads the
+// whole document anyway. The id is tracked so teardown can cancel work that has
+// not run yet — otherwise a queued re-apply lands after cleanupContentScript and
+// re-hides elements clearAllBlocking just restored.
 const scheduleApplySettings = () => {
-  const timeoutId = window.setTimeout(() => {
-    pendingApplyTimeouts.delete(timeoutId)
+  if (pendingApplyTimeout !== null) {
+    return
+  }
+
+  pendingApplyTimeout = window.setTimeout(() => {
+    pendingApplyTimeout = null
     applySettings()
   }, 100)
-
-  pendingApplyTimeouts.add(timeoutId)
 }
 
 const cancelPendingApplySettings = () => {
-  pendingApplyTimeouts.forEach(timeoutId => {
-    window.clearTimeout(timeoutId)
-  })
-  pendingApplyTimeouts.clear()
+  if (pendingApplyTimeout === null) {
+    return
+  }
+
+  window.clearTimeout(pendingApplyTimeout)
+  pendingApplyTimeout = null
 }
 
 const setupObserver = () => {

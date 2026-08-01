@@ -90,15 +90,6 @@ export const clearAllBlocking = () => {
   clearLiveBlocking()
 }
 
-const shouldRenderOverlay = (settings: ExtensionSettings) => {
-  if (!settings.overlay) {
-    return false
-  }
-
-  const currentPageSection = getCurrentPageSection()
-  return currentPageSection !== null
-}
-
 export const applyCurrentSettings = (
   settings: ExtensionSettings,
   handlers: OverlayHandlers,
@@ -121,8 +112,11 @@ export const applyCurrentSettings = (
     clearLiveBlocking()
   }
 
-  if (shouldRenderOverlay(settings)) {
-    renderFeedOverlay(settings, handlers)
+  // Resolved once per sweep and shared with the overlay, which would otherwise
+  // walk the document for the same answer immediately afterwards.
+  const currentPageSection = getCurrentPageSection()
+  if (settings.overlay && currentPageSection) {
+    renderFeedOverlay(settings, handlers, currentPageSection)
   } else {
     removeFeedOverlay()
   }
