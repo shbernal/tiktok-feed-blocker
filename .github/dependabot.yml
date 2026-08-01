@@ -1,0 +1,18 @@
+version: 2
+
+updates:
+  # Extension reviewers at both stores flag stale bundled dependencies, so the
+  # shipped tree needs to keep moving even when nothing else changes.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: development
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
