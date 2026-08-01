@@ -173,6 +173,69 @@ test('blocks and restores Explore targets', async ({
   })
 })
 
+// A video opened from the Explore grid is not the Explore grid, even though
+// TikTok leaves the grid mounted behind the player. Offering "Block Explore"
+// there hides something the user cannot see, so the overlay stays away —
+// while the grid behind the player keeps whatever blocking it already had.
+test('shows no overlay on a video opened from Explore', async ({
+  clearSettings,
+  seedSettings,
+  newTikTokPage,
+  readSettings,
+}) => {
+  await clearSettings()
+  await seedSettings({
+    active: false,
+    home: false,
+    explore: false,
+    live: false,
+    overlay: true,
+  })
+
+  const page = await newTikTokPage()
+  await page.goto('https://www.tiktok.com/explore')
+
+  await expectAvailableOverlay(page, 'Block Explore')
+
+  await page.goto('https://www.tiktok.com/@creator/video/123')
+
+  await expect(page.locator('#explore-modal-video')).toHaveCount(1)
+  await expect(page.locator('#ttfb-feed-overlay')).toHaveCount(0)
+  await expect.poll(readSettings).toMatchObject({
+    active: false,
+    home: false,
+    explore: false,
+    live: false,
+  })
+})
+
+test('keeps a blocked Explore grid hidden behind the video player', async ({
+  clearSettings,
+  seedSettings,
+  newTikTokPage,
+}) => {
+  await clearSettings()
+  await seedSettings(settingsWithOnly('explore'))
+
+  const page = await newTikTokPage()
+  await page.goto('https://www.tiktok.com/@creator/video/123')
+
+  await expect(page.locator('#ttfb-feed-overlay')).toHaveCount(0)
+  await expect(page.locator('#main-content-explore_page')).toHaveCSS(
+    'display',
+    'none',
+  )
+  await expectSectionBlocked(page, 'explore', true)
+  await expectMediaState(page, '#explore-video', { muted: true, volume: 0 })
+  // The player is a sibling of the Explore container, so Explore blocking must
+  // leave it alone.
+  await expect(page.locator('#explore-modal-video')).toBeVisible()
+  await expectMediaState(page, '#explore-modal-video', {
+    muted: false,
+    volume: 0.75,
+  })
+})
+
 test('blocks and restores Live targets', async ({
   clearSettings,
   seedSettings,

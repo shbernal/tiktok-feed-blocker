@@ -88,6 +88,28 @@ const explorePage = pageShell(
   `,
 )
 
+// Opening a video from the Explore grid is a client-side navigation: TikTok
+// pushes `/@user/video/<id>` and mounts the player modal as a sibling of the
+// Explore container, which stays in the DOM, visible and full size, behind it.
+// That is why the fixture keeps the Explore markup and adds the player rather
+// than replacing one with the other.
+const exploreVideoPage = pageShell(
+  'TikTok Explore Video Fixture',
+  `
+    <main
+      id="main-content-explore_page"
+      class="ehxe0ik0 css-9bjk8h-7937d88b--DivShareLayoutBase-7937d88b--StyledShareLayoutV2-7937d88b--ExploreLayout eme3bfk0"
+    >
+      <h1>Explore fixture</h1>
+      <video id="explore-video"></video>
+    </main>
+    <div id="explore-video-modal">
+      <h1>Video detail fixture</h1>
+      <video id="explore-modal-video"></video>
+    </div>
+  `,
+)
+
 // The old fixture had no `#tiktok-live-main-container-id` at all, so Live
 // coverage rested entirely on a hashed class that real TikTok had already
 // rotated away. The classes here are the real ones, kept only so the fixture
@@ -112,6 +134,10 @@ const getFixtureHtml = (url: string) => {
 
   if (pathname.startsWith('/explore')) {
     return explorePage
+  }
+
+  if (/^\/@[^/]+\/video\//.test(pathname)) {
+    return exploreVideoPage
   }
 
   return homePage

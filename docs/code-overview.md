@@ -184,6 +184,33 @@ The one failure mode the stylesheet cannot defend against is TikTok setting
 `!important` rule. It has not been observed, and it fails silently, so it is the
 first thing to check if a section ever stops hiding.
 
+### Where Detection And Blocking Deliberately Disagree
+
+Live gates both on the URL. Explore gates only detection, and the split is the
+point.
+
+Opening a video from the Explore grid is a client-side navigation to
+`/@user/video/<id>`, and TikTok leaves `#main-content-explore_page` mounted,
+visible and full size behind the player modal, with the player itself a sibling
+of that container rather than a child. So the container is present on a page
+that is not the Explore grid.
+
+`hasExploreTargets` therefore requires `/explore` in the path as well as the
+container. Detection is what decides whether the overlay renders and whether the
+shortcut and the browser command have a section to toggle, and all three were
+wrong on the video page: it offered "Block Explore", and pressing it hid a grid
+nobody could see.
+
+`isSectionBlocked` is not gated the same way, and must not be. The grid behind
+the player keeps whatever blocking it already had — revealing it there would put
+a second, audible feed behind the video being watched. Explore's muting is
+scoped to the container it hides, so the player, sitting outside it, is left
+alone either way.
+
+Home gets no URL gate at all. The For You feed rewrites the URL to
+`/@user/video/<id>` as it scrolls, so gating Home would drop the overlay on the
+feed itself.
+
 ### The Ready Gate And `document_start`
 
 Blocking has to be in place before TikTok paints, so the manifest declares a

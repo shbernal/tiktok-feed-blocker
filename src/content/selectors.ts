@@ -20,6 +20,17 @@ export const SELECTORS = {
 
 export const isLivePage = () => window.location.pathname.startsWith('/live')
 
+// Opening a video from the Explore grid pushes `/@user/video/<id>` and renders
+// the player in a modal, but leaves `#main-content-explore_page` mounted,
+// visible and full size behind it. The container alone therefore does not mean
+// the Explore grid is the page in front of the user, and without this gate the
+// video page offers a "Block Explore" button that hides a grid nobody can see.
+//
+// Home gets no equivalent gate on purpose: the For You feed rewrites the URL to
+// `/@user/video/<id>` as it scrolls, so gating it would drop the overlay on the
+// feed itself.
+const isExplorePage = () => window.location.pathname.startsWith('/explore')
+
 export const hasHomeTargets = () => {
   return (
     document.querySelector(SELECTORS.columnListContainer) !== null ||
@@ -29,7 +40,9 @@ export const hasHomeTargets = () => {
 }
 
 export const hasExploreTargets = () => {
-  return document.querySelector(SELECTORS.mainContent) !== null
+  return (
+    isExplorePage() && document.querySelector(SELECTORS.mainContent) !== null
+  )
 }
 
 export const hasLiveTargets = () => {

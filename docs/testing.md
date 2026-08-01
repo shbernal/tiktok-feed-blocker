@@ -63,6 +63,13 @@ markup the selector expects. Class names carry a per-build hash on real TikTok,
 so keep the hashes in the fixture too; they are what makes a bad selector fail
 here instead of in the wild.
 
+That extends to which URL a fixture is served from. `getFixtureHtml` routes on
+`pathname`, and `/@user/video/<id>` serves the Explore grid _plus_ a player
+modal, because that is what TikTok leaves in the DOM after a video is opened
+from Explore. Serving the bare grid there would let a page-section detection bug
+pass — see
+[Where Detection And Blocking Deliberately Disagree](./code-overview.md#where-detection-and-blocking-deliberately-disagree).
+
 Real-site smoke tests use `playwright.real.config.ts` and `e2e/real/`. These
 tests are intentionally separate from the default E2E suite because they depend
 on TikTok uptime, account state, regional UI, CAPTCHA/2FA prompts, current DOM

@@ -46,6 +46,11 @@ const mediaContainersFor = (section: PageSection): Element[] => {
 // left set across a client-side navigation would mute whatever page TikTok
 // rendered next. The gate is re-evaluated on every sweep, which is what keeps
 // SPA navigation handled now that hiding no longer walks the DOM.
+//
+// Explore is deliberately not gated the same way. Its *detection* follows the
+// URL (see `hasExploreTargets`), but its hiding must not: TikTok leaves the
+// Explore grid mounted behind a video modal opened from it, so a URL gate would
+// reveal the grid — and unmute its videos — behind the video being watched.
 const isSectionBlocked = (
   settings: ExtensionSettings,
   section: PageSection,

@@ -149,6 +149,7 @@ describe('content script', () => {
   })
 
   it('renders an overlay for a blocked explore page and persists overlay toggles', () => {
+    window.history.pushState({}, '', '/explore')
     const chromeMock = getChromeMock()
     chromeMock.storage.local.seed({
       [SETTINGS_STORAGE_KEY]: {
@@ -197,6 +198,7 @@ describe('content script', () => {
   })
 
   it('skips the overlay when the preference is off but still blocks', () => {
+    window.history.pushState({}, '', '/explore')
     const chromeMock = getChromeMock()
     chromeMock.storage.local.seed({
       [SETTINGS_STORAGE_KEY]: {
@@ -218,6 +220,7 @@ describe('content script', () => {
   })
 
   it('gives the overlay controls an accessible name in both states', () => {
+    window.history.pushState({}, '', '/explore')
     const chromeMock = getChromeMock()
     chromeMock.storage.local.seed({
       [SETTINGS_STORAGE_KEY]: {
@@ -245,6 +248,83 @@ describe('content script', () => {
     expect(
       screen.getByRole('button', { name: 'Block Explore' }),
     ).toHaveAttribute('id', OVERLAY_BLOCK_BUTTON_ID)
+  })
+
+  // Opening a video from the Explore grid is a client-side navigation to
+  // `/@user/video/<id>` that leaves `#main-content-explore_page` mounted and
+  // visible behind the player modal, with the player itself outside it. The
+  // overlay used to follow the container and offer "Block Explore" on a page
+  // where blocking Explore changes nothing the user can see.
+  describe('on a video opened from explore', () => {
+    const seedExploreVideoPage = (explore: boolean) => {
+      window.history.pushState({}, '', '/@creator/video/123')
+      const chromeMock = getChromeMock()
+      chromeMock.storage.local.seed({
+        [SETTINGS_STORAGE_KEY]: {
+          active: explore,
+          home: false,
+          explore,
+          live: false,
+          overlay: true,
+        },
+      })
+      document.body.innerHTML = `
+        <main id="main-content-explore_page">
+          <video id="explore-grid-video"></video>
+        </main>
+        <div id="video-modal">
+          <video id="modal-video"></video>
+        </div>
+      `
+
+      return chromeMock
+    }
+
+    it('renders no overlay and leaves the toggle command a no-op', () => {
+      const chromeMock = seedExploreVideoPage(false)
+      const sendResponse = vi.fn()
+
+      initContentScript()
+
+      expect(document.getElementById(OVERLAY_ID)).toBeNull()
+
+      const [listener] = chromeMock.runtime.onMessage.listeners()
+      listener?.({ action: 'toggleCurrentPageBlock' }, {}, sendResponse)
+
+      expect(sendResponse).toHaveBeenCalledWith({ success: false })
+      // Only the save `initContentScript` always makes; the command wrote
+      // nothing, so no section was silently flipped from a page that shows no
+      // control for it.
+      expect(chromeMock.storage.local.set).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps a blocked explore grid hidden and muted behind the player', () => {
+      seedExploreVideoPage(true)
+
+      initContentScript()
+
+      // Detection follows the URL, hiding does not. Revealing the grid here
+      // would put a second, audible feed behind the video being watched.
+      expect(document.getElementById(OVERLAY_ID)).toBeNull()
+      expect(
+        displayOf(document.getElementById('main-content-explore_page')),
+      ).toBe('none')
+      expect(document.documentElement).toHaveAttribute(
+        blockedAttributeFor('explore'),
+      )
+
+      const gridVideo = document.getElementById(
+        'explore-grid-video',
+      ) as HTMLVideoElement
+      const modalVideo = document.getElementById(
+        'modal-video',
+      ) as HTMLVideoElement
+
+      expect(gridVideo.muted).toBe(true)
+      // The player sits outside the Explore container, so Explore blocking must
+      // not reach it.
+      expect(modalVideo.muted).toBe(false)
+    })
   })
 
   it('renders a top-right corner overlay for an unblocked page and persists the block action', () => {
