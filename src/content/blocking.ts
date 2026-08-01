@@ -28,7 +28,6 @@ export const clearHomeBlocking = () => {
 
 export const clearExploreBlocking = () => {
   showElements(SELECTORS.mainContent, HIDDEN_EXPLORE_ATTR)
-  showElements(SELECTORS.exploreLayout, HIDDEN_EXPLORE_ATTR)
 }
 
 export const clearLiveBlocking = () => {
@@ -57,22 +56,13 @@ export const applyHomeBlocking = () => {
 }
 
 export const applyExploreBlocking = () => {
-  const containers: Element[] = []
   const mainContent = document.querySelector<HTMLElement>(SELECTORS.mainContent)
-  if (mainContent) {
-    hideElement(mainContent, HIDDEN_EXPLORE_ATTR)
-    containers.push(mainContent)
+  if (!mainContent) {
+    return
   }
 
-  const exploreLayouts = document.querySelectorAll<HTMLElement>(
-    SELECTORS.exploreLayout,
-  )
-  exploreLayouts.forEach(layout => {
-    hideElement(layout, HIDDEN_EXPLORE_ATTR)
-    containers.push(layout)
-  })
-
-  muteMediaInContainers(containers)
+  hideElement(mainContent, HIDDEN_EXPLORE_ATTR)
+  muteMediaInContainers([mainContent])
 }
 
 export const applyLiveBlocking = () => {

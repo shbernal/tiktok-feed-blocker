@@ -9,13 +9,15 @@ const HOME_COMMENT_SIDEBAR_SELECTORS = [
   'section[class*="SectionCommentSidebarContainer"]',
 ] as const
 
+// TikTok interpolates a per-build hash between styled-component name segments
+// (`css-9bjk8h-7937d88b--DivShareLayoutBase-7937d88b--StyledShareLayoutV2`), so
+// a `[class*=...]` selector may only ever name one segment. Two joined by `-`
+// cannot match on a real page, whatever the fixtures say.
 export const SELECTORS = {
   mainContent: '#main-content-explore_page',
   progressIndicator: '.progress-js-inner',
   columnListContainer: '#column-list-container',
   homeCommentSidebar: `:is(${HOME_COMMENT_SIDEBAR_SELECTORS.join(', ')})`,
-  exploreLayout:
-    '[class*="DivShareLayoutBase-StyledShareLayoutV2-ExploreLayout"]',
   feedNavigationContainer: '[class*="DivFeedNavigationContainer"]',
   livePageMainContainer:
     ':is(#tiktok-live-main-container-id, div[class*="ejpasz60"])',
@@ -32,10 +34,7 @@ export const hasHomeTargets = () => {
 }
 
 export const hasExploreTargets = () => {
-  return (
-    document.querySelector(SELECTORS.mainContent) !== null ||
-    document.querySelectorAll(SELECTORS.exploreLayout).length > 0
-  )
+  return document.querySelector(SELECTORS.mainContent) !== null
 }
 
 export const hasLiveTargets = () => {

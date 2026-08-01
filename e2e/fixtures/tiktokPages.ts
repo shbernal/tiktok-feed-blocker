@@ -71,18 +71,20 @@ const homePage = pageShell(
   `,
 )
 
+// Real TikTok carries the ExploreLayout styled-component class on the very node
+// that holds the id, with a per-build hash between every name segment. The old
+// fixture split them across two elements and joined the segments directly,
+// which let a selector pass here that matches nothing in production.
 const explorePage = pageShell(
   'TikTok Explore Fixture',
   `
-    <main id="main-content-explore_page">
+    <main
+      id="main-content-explore_page"
+      class="ehxe0ik0 css-9bjk8h-7937d88b--DivShareLayoutBase-7937d88b--StyledShareLayoutV2-7937d88b--ExploreLayout eme3bfk0"
+    >
       <h1>Explore fixture</h1>
       <video id="explore-video"></video>
     </main>
-    <section
-      class="DivShareLayoutBase-StyledShareLayoutV2-ExploreLayout-fixture"
-    >
-      Explore layout fixture
-    </section>
   `,
 )
 

@@ -126,13 +126,9 @@ test('blocks and restores Explore targets', async ({
   await page.goto('https://www.tiktok.com/explore')
 
   const mainContent = page.locator('#main-content-explore_page')
-  const exploreLayout = page.locator(
-    '[class*="DivShareLayoutBase-StyledShareLayoutV2-ExploreLayout"]',
-  )
 
   await expect(mainContent).toHaveCSS('display', 'none')
   await expect(mainContent).toHaveAttribute('data-ttfb-explore-hidden', 'true')
-  await expect(exploreLayout).toHaveCSS('display', 'none')
   await expect(page.locator('#ttfb-feed-overlay')).toBeVisible()
   await expect(page.locator('#ttfb-active-toggle-label')).toHaveText(
     'Block Explore',
@@ -147,7 +143,6 @@ test('blocks and restores Explore targets', async ({
     'data-ttfb-explore-hidden',
     'true',
   )
-  await expect(exploreLayout).toHaveCSS('display', 'block')
   await expectMediaState(page, '#explore-video', {
     muted: false,
     volume: 0.75,
@@ -163,7 +158,6 @@ test('blocks and restores Explore targets', async ({
 
   await expect(mainContent).toHaveCSS('display', 'none')
   await expect(mainContent).toHaveAttribute('data-ttfb-explore-hidden', 'true')
-  await expect(exploreLayout).toHaveCSS('display', 'none')
   await expect(page.locator('#ttfb-feed-overlay')).toHaveClass(
     /ttfb-overlay-blocked/,
   )
