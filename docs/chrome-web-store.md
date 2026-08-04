@@ -1,16 +1,15 @@
 # Chrome Web Store Listing
 
-Chrome Web Store listing assets live in `chrome-web-store/`.
+Chrome-specific listing assets live in `chrome-web-store/`.
 
 - `chrome-web-store/privacy-justifications.md` contains paste-ready privacy,
   single-purpose, permission, and host-permission justifications for the
   Developer Dashboard privacy form.
-- `chrome-web-store/screenshots/` contains the screenshot assets for the store
-  listing.
 
-The long description is not in this directory. It is shared with the AMO listing
-at `store/description.txt`, because it is the one field both stores publish
-verbatim. Edit it there.
+Neither the long description nor the screenshots are in this directory. Both are
+shared with the AMO listing and live under `store/`: `store/description.txt` and
+`store/screenshots/`. Edit them there. AMO captions and orders the same images
+through `amo/previews.json`; the Chrome listing takes them as-is.
 
 ## The Description Is A Manual Paste
 

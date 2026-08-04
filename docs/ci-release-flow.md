@@ -96,6 +96,14 @@ script:
    `amo/source-submission.md`.
 4. Attaches the source archive in a second call, because AMO cannot accept
    source as JSON or nested in a form-data version object.
+5. Reapplies the listing icon from `public/icons/icon128.png`, and prints how
+   far the published screenshots have drifted from `amo/previews.json`.
+
+The release job does not pass `--sync-previews`, so screenshots are never
+replaced by an automated release — the drift line is there to make a needed sync
+visible. Apply one by hand with `pnpm publish:amo --assets-only
+--sync-previews`, which touches no package and creates no version. See
+[AMO Listing](amo-listing.md) for why previews are opt-in and the icon is not.
 
 Every request mints its own JWT. AMO caps a token's lifetime at five minutes
 past issue, which is shorter than validation polling can run.
@@ -182,7 +190,7 @@ path.
    TIKTOK_REAL_PROFILE_DIR=.e2e/tiktok-injected-profile pnpm e2e:real
    ```
 
-4. Check whether `store/description.txt` or listing screenshots need updates for
+4. Check whether `store/description.txt` or `store/screenshots/` need updates for
    the user-facing change. The release job reapplies that description to AMO;
    Chrome needs a manual Developer Dashboard paste, so note it if it changed.
 5. Commit the release candidate and version bump.
@@ -191,6 +199,9 @@ path.
 8. Watch the `Publish Chrome Web Store` and `Publish addons.mozilla.org` runs.
 9. Confirm Chrome Web Store shows the new version as submitted or published, and
    that AMO shows it as awaiting review.
+10. If the release job printed a previews drift line, run
+    `pnpm publish:amo --assets-only --sync-previews` to reapply the screenshots.
+    The job never does this on its own.
 
 Both stores reject reused extension versions, so every release must bump
 `package.json` before publishing.

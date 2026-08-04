@@ -27,10 +27,12 @@ addons.mozilla.org, and the same source tree builds both packages.
 - `docs/` contains contributor-facing documentation for tests and extension
   internals.
 - `public/icons/` contains extension icons copied into builds.
-- `chrome-web-store/` contains store-listing copy, privacy justifications, and
-  media assets.
-- `amo/` contains the addons.mozilla.org listing copy, metadata, data-collection
-  answer, and reviewer build instructions.
+- `store/` contains the listing assets both stores publish verbatim: the long
+  description and the screenshots.
+- `chrome-web-store/` contains the Chrome-specific privacy justifications.
+- `amo/` contains the AMO-specific listing metadata, the previews manifest that
+  captions and orders `store/screenshots/`, the data-collection answer, and
+  reviewer build instructions.
 - `scripts/` contains the packaging and publishing scripts run by CI.
 - `tests/` contains source-convention guards that run in the same Vitest command
   as the unit tests.
@@ -109,15 +111,20 @@ healthy.
 - Do not create or replace files in `release/` unless doing explicit release
   packaging.
 - Do not change `chrome-web-store/`, `amo/`, or `store/` assets unless the task
-  is about listing screenshots or store metadata. `store/description.txt` is the
-  single long description both stores publish verbatim — edit it once, and never
-  reintroduce a per-store copy. Everything still under `chrome-web-store/` and
-  `amo/` answers a store-specific policy or metadata question and is meant to
-  differ.
+  is about listing screenshots or store metadata. `store/` holds what both
+  stores publish verbatim — the long description and the screenshots. Edit those
+  once and never reintroduce a per-store copy. Everything still under
+  `chrome-web-store/` and `amo/` answers a store-specific policy or metadata
+  question and is meant to differ.
 - Editing `store/description.txt` is a live change to the AMO listing:
   `scripts/publish-amo.mjs` reapplies it on every release. The Chrome Web Store
   has no such automation, so the same edit reaches Chrome only when someone
   pastes it into the Developer Dashboard.
+- Replacing anything in `store/screenshots/` also needs `amo/previews.json`
+  checked, since it captions and orders those files by path. Screenshots reach
+  AMO only through an explicit `pnpm publish:amo --assets-only --sync-previews`;
+  a release prints the drift but never syncs them. Chrome needs the same manual
+  dashboard upload as the description.
 - Do not change `browser_specific_settings.gecko.id`. AMO binds the listing and
   every installed user's update path to it, so a new id is a new add-on.
 - Do not bump `package.json` version unless explicitly requested.

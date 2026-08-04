@@ -1,0 +1,20 @@
+[
+  {
+    "file": "store/screenshots/tiktok-feedblocker-1.png",
+    "caption": {
+      "en-US": "Blocking Home clears the For You feed and leaves an in-page switch to bring it back."
+    }
+  },
+  {
+    "file": "store/screenshots/tiktok-feedblocker-2.png",
+    "caption": {
+      "en-US": "Explore and Live work the same way, and the popup toggles every page at once or one at a time."
+    }
+  },
+  {
+    "file": "store/screenshots/tiktok-feedblocker-3.png",
+    "caption": {
+      "en-US": "Open source at github.com/shbernal/tiktok-feed-blocker."
+    }
+  }
+]

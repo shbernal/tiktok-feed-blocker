@@ -10,11 +10,24 @@ import path from 'node:path'
 import process from 'node:process'
 import crypto from 'node:crypto'
 import { printHelpAndExit } from './help.mjs'
+import {
+  checkImageBytes,
+  describePreviewDrift,
+  imageContentType,
+  parsePreviewManifest,
+  planPreviewSync,
+} from './amo-previews.mjs'
 
 const API = 'https://addons.mozilla.org/api/v5'
 const GUID = 'tiktok-feed-blocker@shbernal.github.io'
 const CHANNEL = 'listed'
 const LICENSE = 'MIT'
+
+// The listing icon and the previews are add-on metadata, not version metadata:
+// they are edited on the add-on record and survive every release untouched
+// unless something here rewrites them.
+const ICON = 'public/icons/icon128.png'
+const PREVIEW_MANIFEST = 'amo/previews.json'
 
 // Firefox only. The manifest declares no Android support, and
 // `data_collection_permissions` needs Firefox for Android 142 while the desktop
@@ -29,6 +42,8 @@ const root = process.cwd()
 const dryRun = process.argv.includes('--dry-run')
 const checkOnly = process.argv.includes('--check')
 const validateOnly = process.argv.includes('--validate-only')
+const assetsOnly = process.argv.includes('--assets-only')
+const syncPreviews = process.argv.includes('--sync-previews')
 
 const read = file => fs.readFileSync(path.resolve(root, file), 'utf8')
 const readJson = file => JSON.parse(read(file))
@@ -36,20 +51,28 @@ const readJson = file => JSON.parse(read(file))
 const { version } = readJson('package.json')
 
 printHelpAndExit(`
-Usage: pnpm publish:amo [--dry-run | --check | --validate-only] [--help]
+Usage: pnpm publish:amo [--dry-run | --check | --validate-only | --assets-only]
+                       [--sync-previews] [--help]
 
 Submits the built Firefox package to addons.mozilla.org against API v5: uploads
-the package, waits for server-side validation, creates the version, then
-attaches the source archive. A listed submission is queued for human review, so
-a successful run ends with the add-on nominated, not public.
+the package, waits for server-side validation, creates the version, attaches the
+source archive, then reapplies the listing icon. A listed submission is queued
+for human review, so a successful run ends with the add-on nominated, not
+public.
 
 Flags
-  --dry-run        resolve the listing, approval notes, and file paths and
-                   print them; calls nothing
+  --dry-run        resolve the listing, approval notes, previews, and file
+                   paths and print them; calls nothing
   --check          verify the API credentials and exit
   --validate-only  upload through AMO's real validator without creating a
                    version; nothing is submitted and the add-on id is not
                    claimed
+  --assets-only    apply the listing icon and, with --sync-previews, the
+                   previews to the existing add-on; submits no version
+  --sync-previews  replace the published previews with ${PREVIEW_MANIFEST}.
+                   Off by default: screenshots change about once a year and a
+                   sync deletes and re-uploads all of them, so every run
+                   without it prints how far the listing has drifted instead
   --help, -h       show this text
 
 Environment
@@ -119,6 +142,9 @@ const listing = () => ({
   description: { 'en-US': read('store/description.txt').trim() },
 })
 
+const previewManifest = () =>
+  parsePreviewManifest(readJson(PREVIEW_MANIFEST), PREVIEW_MANIFEST)
+
 const base64url = value => Buffer.from(value).toString('base64url')
 
 // AMO caps a token's life at five minutes past `iat`, so every request mints its
@@ -174,10 +200,20 @@ const request = async (method, endpoint, { json, form } = {}) => {
   return body
 }
 
-const zipPart = file =>
-  new File([fs.readFileSync(file)], path.basename(file), {
-    type: 'application/zip',
-  })
+const filePart = (file, type) =>
+  new File([fs.readFileSync(file)], path.basename(file), { type })
+
+const zipPart = file => filePart(file, 'application/zip')
+
+// AMO also requires the icon to be square, which it enforces server-side. That
+// is left to it: reading dimensions here would mean parsing PNG and JPEG
+// headers to re-derive an answer the API already gives clearly.
+const imagePart = file => {
+  const absolute = path.resolve(root, file)
+  checkImageBytes(file, fs.statSync(absolute).size)
+
+  return filePart(absolute, imageContentType(file))
+}
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -264,6 +300,67 @@ const attachSource = async versionId => {
   return version
 }
 
+// The listing icon is separate metadata from the icons in the package. The
+// manifest `icons` key drives about:addons, not the AMO page, and the JSON PUT
+// that carries the rest of the listing cannot carry a file at all — AMO
+// documents `icon` as multipart-only and unsettable at creation. So there was
+// never a code path that could set it, which is why the listing sat on AMO's
+// placeholder while the shipped XPI had every icon it declared.
+//
+// Reapplied unconditionally, like the description: it is one small file that
+// replaces itself in place, so there is no churn to opt out of.
+const uploadIcon = async () => {
+  const form = new FormData()
+  form.set('icon', imagePart(ICON))
+
+  const addon = await request('PATCH', `/addons/addon/${GUID}/`, { form })
+
+  console.log(`applied listing icon from ${ICON}`)
+  return addon
+}
+
+// Previews and the icon are edited on the add-on rather than on a version, so
+// AMO accepts them while a version sits in review — the same path that already
+// lets the release PUT rewrite the description. Every call throws on a non-2xx,
+// so a rejection stops the run instead of half-applying.
+const applyListingAssets = async remotePreviews => {
+  await uploadIcon()
+
+  const manifest = previewManifest()
+
+  if (!syncPreviews) {
+    console.log(describePreviewDrift(remotePreviews, manifest))
+    return
+  }
+
+  const { uploads, deletes } = planPreviewSync(remotePreviews, manifest)
+
+  for (const upload of uploads) {
+    const form = new FormData()
+    form.set('image', imagePart(upload.file))
+    form.set('position', String(upload.position))
+
+    const preview = await request('POST', `/addons/addon/${GUID}/previews/`, {
+      form,
+    })
+
+    // `caption` is writable on create, but a localized value would have to
+    // survive multipart as a bare string and land in whatever AMO treats as the
+    // default locale. Sending it as JSON afterwards keeps the `{"en-US": ...}`
+    // shape the rest of the listing is written in.
+    await request('PATCH', `/addons/addon/${GUID}/previews/${preview.id}/`, {
+      json: { caption: upload.caption },
+    })
+
+    console.log(`uploaded preview ${upload.position} from ${upload.file}`)
+  }
+
+  for (const id of deletes) {
+    await request('DELETE', `/addons/addon/${GUID}/previews/${id}/`)
+    console.log(`removed superseded preview ${id}`)
+  }
+}
+
 const requireEnv = () => {
   const missing = [
     ['MOZILLA_ADDON_JWT_ISSUER', issuer],
@@ -301,11 +398,34 @@ const main = async () => {
     console.log(`\n--- approval notes ---\n${approvalNotes()}`)
     console.log(`\npackage ${path.relative(root, packagePath)}`)
     console.log(`source  ${path.relative(root, sourcePath)}`)
+    console.log(`icon    ${ICON}`)
+
+    // The manifest is parsed and every image resolved and size-checked here,
+    // which is the point of printing it: a bad path or an oversized screenshot
+    // fails now rather than partway through a real sync. What cannot be shown
+    // is how far the listing has drifted — that needs AMO's side, and a dry run
+    // makes no calls. The drift line is printed by a real run instead.
+    console.log('\n--- previews ---')
+
+    for (const preview of previewManifest()) {
+      imagePart(preview.file)
+      console.log(`${preview.file}\n  ${preview.caption['en-US']}`)
+    }
+
     return
   }
 
   requireEnv()
   await verifyCredentials()
+
+  // Applying the assets on their own needs no package and no version, which is
+  // what makes it the way to repair a listing that is already public.
+  if (assetsOnly) {
+    const addon = await request('GET', `/addons/addon/${GUID}/`)
+    await applyListingAssets(addon.previews ?? [])
+    console.log(`\nlisting  https://addons.mozilla.org/addon/${addon.slug}/`)
+    return
+  }
 
   // An upload on its own creates nothing on AMO and does not claim the add-on
   // id — only creating a version does that — so this is a safe way to put a
@@ -322,6 +442,11 @@ const main = async () => {
   const upload = await awaitValidation((await uploadPackage()).uuid)
   const addon = await submitVersion(upload.uuid)
   const version = await attachSource(addon.version.id)
+
+  // After `submitVersion`, because on a first-ever submission the add-on record
+  // does not exist until that PUT creates it. Its response already carries the
+  // current previews, so the drift line costs no extra call.
+  await applyListingAssets(addon.previews ?? [])
 
   // A listed submission is queued for human review; it does not go live the way
   // a Chrome Web Store publish does. A file status of `unreviewed` and an

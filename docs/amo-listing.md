@@ -9,16 +9,20 @@ holds the Chrome-specific ones. Copy that both stores publish verbatim lives in
   Copy](#store-listing-copy-is-shared) below.
 - `amo/listing.json` contains the rest of the listing metadata — slug, summary,
   categories, tags, and support links — in the shape the AMO API accepts.
+- `amo/previews.json` orders and captions the screenshots AMO publishes; see
+  [Listing Assets](#listing-assets-are-repo-driven-too) below.
 - `amo/data-collection.md` contains the `data_collection_permissions` answer,
   the evidence it rests on, and paste-ready permission justifications for
   reviewer notes.
 - `amo/source-submission.md` contains the reviewer build instructions and how to
   produce the source archive.
 
-Screenshots are shared with the Chrome listing: `chrome-web-store/screenshots/`
-holds the three images used on both stores. AMO has no promo-tile requirement,
-so it needs nothing the Chrome listing does not already have. Do not copy those
-files into `amo/` and do not regenerate them for AMO.
+Screenshots are shared with the Chrome listing: `store/screenshots/` holds the
+three images used on both stores. AMO has no promo-tile requirement, so it needs
+nothing the Chrome listing does not already have. Do not copy those files into
+`amo/` and do not regenerate them for AMO. `amo/previews.json` references them
+in place, and stays in `amo/` because it is AMO-shaped metadata — localized
+captions and `position` semantics — about images Chrome consumes without either.
 
 ## Store Listing Copy Is Shared
 
@@ -64,6 +68,59 @@ Field constraints worth knowing before editing:
 - Localized fields are written as `{"en-US": "..."}`. They read back in a
   richer shape than they are written in, so do not round-trip a `GET` response
   into a `PATCH` body.
+
+## Listing Assets Are Repo-Driven Too
+
+The listing icon and the screenshots are metadata on the add-on, not on a
+version, and they do not come from the package. The manifest `icons` key drives
+`about:addons`; the AMO page shows a placeholder until something uploads an icon
+explicitly. Neither can ride along on the listing `PUT`, because AMO takes both
+as multipart form-data only and refuses `icon` at add-on creation. Both are
+applied after `submitVersion`, which is also when the add-on record first exists
+on a maiden submission.
+
+`scripts/publish-amo.mjs` applies them:
+
+| Asset    | Endpoint                               | When                        |
+| -------- | -------------------------------------- | --------------------------- |
+| Icon     | `PATCH /addons/addon/{guid}/` (`icon`) | every release               |
+| Previews | `POST`/`DELETE .../previews/{id}/`     | only with `--sync-previews` |
+
+Captions are a second call. `caption` is writable when a preview is created, but
+a localized value cannot survive multipart without collapsing to a bare string,
+so the image is posted first and the `{"en-US": ...}` caption patched as JSON.
+
+Constraints, which the script checks locally so a bad file fails before anything
+is uploaded: PNG or JPEG only, not animated, under 4MB. The icon must also be
+square — AMO enforces that server-side. Previews have no minimum dimension; the
+1000×750 in AMO's documentation is a resize target, not a rejection threshold.
+The three 1280×800 screenshots are accepted as they are.
+
+### Why Previews Are Opt-In
+
+A sync replaces: it uploads every entry in `amo/previews.json` and deletes what
+was published before. It cannot do less. AMO re-encodes images on ingest, so a
+local file and its published copy never share a hash, and nothing on a preview
+records which manifest entry produced it. Any attempt to reuse a published
+preview would amount to assuming its bytes are still the ones on disk — and a
+swapped screenshot that silently never uploads is the failure worth avoiding.
+
+Replacing on every release would churn the public listing for description-only
+changes, so `--sync-previews` is off by default. To keep that from going quiet,
+every release without the flag prints how many previews the manifest holds
+versus how many AMO has. Equal counts are reported as equal counts, not as a
+match — the images themselves are not comparable from here.
+
+Order in `amo/previews.json` is the display order. `position` is derived from
+the index rather than written out, so reordering the file reorders the listing.
+
+### Repairing A Live Listing
+
+`pnpm publish:amo --assets-only` applies the icon, and with `--sync-previews`
+the previews, to the add-on that already exists. It uploads no package and
+creates no version, which is what makes it usable between releases. AMO accepts
+both while a version sits in review, since they are add-on metadata rather than
+version metadata.
 
 ## Source Submission Is Mandatory
 
