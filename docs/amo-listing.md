@@ -54,14 +54,16 @@ the metadata travels with the submission rather than being applied ahead of it.
 Field constraints worth knowing before editing:
 
 - `summary` is capped at 250 characters and `name` at 50.
-- `categories` takes category slugs from
-  `GET /api/v5/addons/categories/`. This listing uses `social-communication`.
-- `tags` comes from a fixed AMO vocabulary, capped at 10. The write endpoint
-  rejects a tag outside it, but the search endpoint does not: probing with
-  `GET /api/v5/addons/search/?tag=<tag>` returns HTTP 200 and `count: 0` for a
-  name that is not a tag at all, so read a zero count as "not a tag" rather
-  than "an unused tag". This listing uses `content blocker` and
-  `social media`.
+- `tags` and `categories` are closed vocabularies, not free text: AMO defines 42
+  tags and 15 extension categories and rejects anything else. The live lists are
+  `https://addons.mozilla.org/api/v5/addons/tags/` and `.../addons/categories/`,
+  and `pnpm publish:amo --dry-run` checks the file against both. This listing
+  uses the `social-communication` category and the `content blocker` and
+  `social media` tags; `tags` is additionally capped at 10.
+- Do not probe a tag with `GET /api/v5/addons/search/?tag=<tag>`. The write
+  endpoint rejects a tag outside the vocabulary but search does not: it returns
+  HTTP 200 and `count: 0` for a name that is not a tag at all, so a zero count
+  means "not a tag" as often as it means "an unused tag".
 - `categories` is a flat array in v5. The published API reference still shows
   it keyed by application; that shape is accepted only for backwards
   compatibility, and the Android categories behind it no longer exist.
@@ -173,3 +175,8 @@ the reviewer instructions, and the reproducibility check.
    release, remembering the same text is the Chrome listing copy.
 4. Rebuild from a fresh extraction of the source archive and confirm the output
    matches the submitted package.
+5. Run `pnpm publish:amo --dry-run`. It resolves the listing, prints the
+   reviewer notes and previews, and validates the tags and categories against
+   AMO. Metadata AMO rejects is only rejected on the call that creates the
+   version, which happens after the release that triggered it is already
+   published, so the dry run is the last cheap place to catch it.

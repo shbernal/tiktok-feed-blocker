@@ -63,7 +63,8 @@ public.
 
 Flags
   --dry-run        resolve the listing, approval notes, previews, and file
-                   paths and print them; calls nothing
+                   paths and print them, then check the tags and categories
+                   against AMO's vocabularies; nothing is uploaded
   --check          verify the API credentials and exit
   --validate-only  upload through AMO's real validator without creating a
                    version; nothing is submitted and the add-on id is not
@@ -217,6 +218,58 @@ const request = async (method, endpoint, { json, form } = {}) => {
 
     return body
   }
+}
+
+// Tags and categories are closed vocabularies. AMO rejects anything outside
+// them on the PUT that creates the version, which is after the package has been
+// uploaded and validated and after the release that triggered it is already
+// published — so the whole release fails on a metadata typo. Both lists are
+// public and unauthenticated, so checking up front costs nothing and turns that
+// into a failed dry run.
+const publicList = async endpoint => {
+  const response = await fetch(`${API}${endpoint}`)
+
+  if (!response.ok) {
+    throw new Error(`GET ${endpoint} → ${response.status}`)
+  }
+
+  return response.json()
+}
+
+const verifyListing = async () => {
+  const { tags = [], categories = [] } = listing()
+  const [validTags, allCategories] = await Promise.all([
+    publicList('/addons/tags/'),
+    publicList('/addons/categories/'),
+  ])
+
+  const validCategories = allCategories
+    .filter(category => category.type === 'extension')
+    .map(category => category.slug)
+
+  const problems = [
+    ['tags', tags, validTags],
+    ['categories', categories, validCategories],
+  ]
+    .map(([field, values, valid]) => [
+      field,
+      values.filter(value => !valid.includes(value)),
+      valid,
+    ])
+    .filter(([, unknown]) => unknown.length > 0)
+    .map(
+      ([field, unknown, valid]) =>
+        `amo/listing.json ${field} AMO does not define: ${unknown.join(', ')}\n` +
+        `  valid ${field}: ${valid.join(', ')}`,
+    )
+
+  if (problems.length > 0) {
+    throw new Error(problems.join('\n\n'))
+  }
+
+  console.log(
+    `listing metadata valid (${tags.length} tags, ${categories.length} categories)`,
+  )
 }
 
 const filePart = (file, type) =>
@@ -435,7 +488,7 @@ const main = async () => {
     // which is the point of printing it: a bad path or an oversized screenshot
     // fails now rather than partway through a real sync. What cannot be shown
     // is how far the listing has drifted — that needs AMO's side, and a dry run
-    // makes no calls. The drift line is printed by a real run instead.
+    // makes no authenticated calls. The drift line is printed by a real run.
     console.log('\n--- previews ---')
 
     for (const preview of previewManifest()) {
@@ -443,11 +496,14 @@ const main = async () => {
       console.log(`${preview.file}\n  ${preview.caption['en-US']}`)
     }
 
+    console.log()
+    await verifyListing()
     return
   }
 
   requireEnv()
   await verifyCredentials()
+  await verifyListing()
 
   // Applying the assets on their own needs no package and no version, which is
   // what makes it the way to repair a listing that is already public.
