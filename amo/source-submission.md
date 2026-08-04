@@ -26,33 +26,38 @@ archive includes `pnpm-lock.yaml`, which the reviewer build depends on.
 
 ## Reviewer Build Instructions
 
-Paste this section into the "Notes to Reviewer" field on the version, so it is
-available without opening the archive.
+The quoted block below is the "Notes to Reviewer" field on the version, so the
+instructions are available without opening the archive.
+`scripts/publish-amo.mjs` sends it verbatim; paste it by hand only for a
+submission made outside that script.
+
+That field is a plain-text input, so the block stays free of Markdown — no
+backticks, emphasis, or fenced code. Commands are indented instead of fenced,
+which renders as code here and reaches the reviewer as indentation. Prose
+outside the block is documentation and keeps its markup.
 
 > Build environment: Ubuntu 24.04, Node.js 24.14.0.
 >
-> **This project uses pnpm, not npm.** Do not run `npm install` — there is no
-> `package-lock.json`, and the dependency tree is pinned by `pnpm-lock.yaml`.
-> The required pnpm version is declared in `package.json` as
-> `"packageManager": "pnpm@11.3.0"`, and Corepack (bundled with Node 24)
-> installs and pins that exact version for you.
+> This project uses pnpm, not npm. Do not run npm install — there is no
+> package-lock.json, and the dependency tree is pinned by pnpm-lock.yaml. The
+> required pnpm version is declared in package.json as "packageManager":
+> "pnpm@11.3.0", and Corepack (bundled with Node 24) installs and pins that
+> exact version for you.
 >
 > From the root of the extracted source archive:
 >
-> ```sh
-> corepack enable
-> pnpm install --frozen-lockfile
-> EXT_TARGET=firefox pnpm build
-> ```
+>     corepack enable
+>     pnpm install --frozen-lockfile
+>     EXT_TARGET=firefox pnpm build
 >
-> The Firefox package is written to `dist-firefox/`. Its contents are what was
+> The Firefox package is written to dist-firefox/. Its contents are what was
 > submitted as the add-on package.
 >
-> `EXT_TARGET` selects the build target. `EXT_TARGET=firefox` produces the
-> Firefox package in `dist-firefox/`; any other value, including unset, produces
-> the Chrome Web Store package in `dist/`. The two differ only in the manifest:
-> the Firefox build uses `background.scripts` rather than
-> `background.service_worker`, and adds `browser_specific_settings.gecko`.
+> EXT_TARGET selects the build target. EXT_TARGET=firefox produces the Firefox
+> package in dist-firefox/; any other value, including unset, produces the
+> Chrome Web Store package in dist/. The two differ only in the manifest: the
+> Firefox build uses background.scripts rather than background.service_worker,
+> and adds browser_specific_settings.gecko.
 
 ## Reproducibility
 
