@@ -4,7 +4,7 @@ import { TOGGLE_SHORTCUT_STORAGE_KEY } from '../shared/shortcut'
 
 const loadBackgroundScript = async () => {
   vi.resetModules()
-  await import('./main')
+  await import('./worker')
 }
 
 describe('background command handling', () => {

@@ -16,9 +16,17 @@ export default defineManifest({
   host_permissions: ['*://*.tiktok.com/*'],
   // Gecko has no extension service workers, and crxjs reads the background
   // entry straight off this manifest rather than rewriting it per target.
+  //
+  // `worker.ts`, not `main.ts`: crxjs emits every entry chunk under
+  // `basename(file)`, so two entries sharing a basename collide and the
+  // generated `service-worker-loader.js` ends up importing the wrong chunk.
+  // With both entries called `main.ts` the loader imported the *content*
+  // script, the background chunk was emitted but referenced by nothing, and
+  // `chrome.commands.onCommand` was never registered in any shipped build.
+  // `tests/manifest-entry-names.test.ts` keeps the basenames distinct.
   background: isFirefox
-    ? { scripts: ['src/background/main.ts'] }
-    : { service_worker: 'src/background/main.ts', type: 'module' },
+    ? { scripts: ['src/background/worker.ts'] }
+    : { service_worker: 'src/background/worker.ts', type: 'module' },
   commands: {
     'toggle-current-page-block': {
       suggested_key: {

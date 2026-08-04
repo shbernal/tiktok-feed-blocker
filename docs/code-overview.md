@@ -69,7 +69,7 @@ answering the default keys is the divergence this exists to remove.
 
 ## Background Command Flow
 
-`src/background/main.ts` listens for the `toggle-current-page-block` command,
+`src/background/worker.ts` listens for the `toggle-current-page-block` command,
 currently suggested as `Ctrl+Shift+8` (`Command+Shift+8` on macOS). When the
 command fires, it queries the active tab, checks that the tab URL is on TikTok
 using `src/shared/tiktok.ts`, and sends this content-script message:

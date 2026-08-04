@@ -172,12 +172,23 @@ UPDATE_BLOCKING_CSS=1 pnpm test blocking-css
 The file is in `.prettierignore`, because the guard compares exact bytes.
 Importing the builder is also why `tsconfig.node.json` includes the `DOM` lib.
 
+`tests/manifest-entry-names.test.ts` fails if two script entries in
+`manifest.config.ts` share a basename, on either target. crxjs emits each entry
+as a chunk named `basename(file)` and then resolves the background entry back to
+a filename when it writes `service-worker-loader.js`, so colliding basenames
+resolve to the same chunk. With `src/background/main.ts` and
+`src/content/main.ts` both emitted as `main.ts`, the loader imported the
+content-script chunk, the background chunk was emitted but referenced by
+nothing, and `chrome.commands.onCommand` never registered in a shipped build.
+The build, the typecheck and every unit test stayed green throughout, which is
+why the guard is on the entry names rather than on the output.
+
 ## Current Coverage Map
 
 - `src/shared/settings.test.ts` covers settings defaults, normalization, legacy
   migration, and active/page-section synchronization.
 - `src/shared/tiktok.test.ts` covers TikTok URL detection.
-- `src/background/main.test.ts` covers the keyboard command path from command
+- `src/background/worker.test.ts` covers the keyboard command path from command
   event to active-tab messaging.
 - `src/popup/App.test.tsx` covers loading stored settings, toggling all pages,
   toggling one section, persistence, and tab notifications.
@@ -195,6 +206,10 @@ Importing the builder is also why `tsconfig.node.json` includes the `DOM` lib.
   across `src/`.
 - `tests/blocking-css.test.ts` covers the generated `document_start` stylesheet
   against the selector table.
+- `tests/manifest-entry-names.test.ts` covers the distinct-basename rule for
+  manifest script entries on both targets.
+- `e2e/specs/background-worker.spec.ts` covers the loaded build actually running
+  the background entry, by asserting the mirrored `toggleShortcut` key exists.
 
 ## Adding Tests
 

@@ -14,8 +14,9 @@ addons.mozilla.org, and the same source tree builds both packages.
   `package.json`, and selects the build target from `EXT_TARGET`. Chrome is the
   default and builds to `dist/`; `EXT_TARGET=firefox` builds to `dist-firefox/`.
   Only manifest keys differ between the two.
-- `src/background/main.ts` handles the browser command that toggles blocking for
-  the active TikTok tab.
+- `src/background/worker.ts` handles the browser command that toggles blocking
+  for the active TikTok tab. The basename has to stay distinct from every other
+  script entry in `manifest.config.ts`; see the note there.
 - `src/content/main.ts` runs on TikTok pages, hides page sections, mutes media,
   renders the in-page overlay, and listens for storage/runtime changes.
 - `src/popup/App.tsx` is the extension popup UI for global and per-section

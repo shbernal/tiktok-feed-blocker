@@ -26,7 +26,7 @@ call site to `browser.*`, and rewrite the test mock. It was rejected because the
 codebase was already almost entirely callback-style, so the migration touched
 roughly twenty call sites for no behavioral gain, and the polyfill would have
 had to be bundled into all three surfaces. Only two call sites actually awaited
-a `chrome.*` call — the tab lookups in `src/background/main.ts` and
+a `chrome.*` call — the tab lookups in `src/background/worker.ts` and
 `src/popup/App.tsx` — and both became callbacks.
 
 Revisit this only if an API genuinely needs promise ergonomics. Adding the
