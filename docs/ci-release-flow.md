@@ -182,8 +182,9 @@ path.
    TIKTOK_REAL_PROFILE_DIR=.e2e/tiktok-injected-profile pnpm e2e:real
    ```
 
-4. Check whether `chrome-web-store/description.txt`, `amo/description.txt`, or
-   listing screenshots need updates for the user-facing change.
+4. Check whether `store/description.txt` or listing screenshots need updates for
+   the user-facing change. The release job reapplies that description to AMO;
+   Chrome needs a manual Developer Dashboard paste, so note it if it changed.
 5. Commit the release candidate and version bump.
 6. Push `main`.
 7. Publish a GitHub Release with a matching tag, for example `v1.2.0`.

@@ -110,9 +110,13 @@ const approvalNotes = () => {
   return quoted
 }
 
+// The long description is the one listing field both stores publish verbatim,
+// so it lives in `store/` rather than `amo/` and the Chrome dashboard paste
+// comes from the same file. Everything else here is AMO-shaped and stays in
+// `amo/listing.json`.
 const listing = () => ({
   ...readJson('amo/listing.json'),
-  description: { 'en-US': read('amo/description.txt').trim() },
+  description: { 'en-US': read('store/description.txt').trim() },
 })
 
 const base64url = value => Buffer.from(value).toString('base64url')

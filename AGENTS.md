@@ -108,10 +108,16 @@ healthy.
   instead.
 - Do not create or replace files in `release/` unless doing explicit release
   packaging.
-- Do not change `chrome-web-store/` or `amo/` assets unless the task is about
-  listing screenshots or store metadata. `amo/description.txt` and
-  `chrome-web-store/description.txt` describe the same product; change them
-  together.
+- Do not change `chrome-web-store/`, `amo/`, or `store/` assets unless the task
+  is about listing screenshots or store metadata. `store/description.txt` is the
+  single long description both stores publish verbatim — edit it once, and never
+  reintroduce a per-store copy. Everything still under `chrome-web-store/` and
+  `amo/` answers a store-specific policy or metadata question and is meant to
+  differ.
+- Editing `store/description.txt` is a live change to the AMO listing:
+  `scripts/publish-amo.mjs` reapplies it on every release. The Chrome Web Store
+  has no such automation, so the same edit reaches Chrome only when someone
+  pastes it into the Developer Dashboard.
 - Do not change `browser_specific_settings.gecko.id`. AMO binds the listing and
   every installed user's update path to it, so a new id is a new add-on.
 - Do not bump `package.json` version unless explicitly requested.

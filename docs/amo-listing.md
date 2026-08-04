@@ -1,9 +1,12 @@
 # AMO Listing
 
-addons.mozilla.org listing assets live in `amo/`, mirroring how
-`chrome-web-store/` holds the Chrome Web Store listing.
+AMO-specific listing assets live in `amo/`, mirroring how `chrome-web-store/`
+holds the Chrome-specific ones. Copy that both stores publish verbatim lives in
+`store/` instead of being duplicated into each.
 
-- `amo/description.txt` contains the long description for the listing.
+- `store/description.txt` contains the long description. It is shared with the
+  Chrome listing rather than living in `amo/`; see [Store Listing
+  Copy](#store-listing-copy-is-shared) below.
 - `amo/listing.json` contains the rest of the listing metadata — slug, summary,
   categories, tags, and support links — in the shape the AMO API accepts.
 - `amo/data-collection.md` contains the `data_collection_permissions` answer,
@@ -17,15 +20,27 @@ holds the three images used on both stores. AMO has no promo-tile requirement,
 so it needs nothing the Chrome listing does not already have. Do not copy those
 files into `amo/` and do not regenerate them for AMO.
 
-When the public listing copy changes, update `amo/description.txt` and
-`chrome-web-store/description.txt` in the same change so both stores and the
-repository stay aligned.
+## Store Listing Copy Is Shared
+
+The long description is the only listing field both stores publish verbatim, so
+there is one copy at `store/description.txt` and no per-store duplicate. It is
+plain text with `-` bullets, which is the format both stores render acceptably:
+AMO accepts a limited set of HTML tags in this field and the Chrome Web Store
+does not, so the shared file stays at that lowest common denominator. Wanting
+markup on the AMO side is the one thing that would justify splitting the file
+again.
+
+The two stores consume it at different speeds. AMO is automatic — the release
+job reapplies it below. Chrome is a manual dashboard paste, so a copy edit is
+live on AMO at the next release while Chrome still shows the old text until
+someone pastes it. Edits to this file are effectively queued AMO changes; do not
+park draft copy there.
 
 ## Listing Metadata Is Applied Through The API
 
 The listing is set from this repository, not from the AMO developer dashboard,
 so it stays reviewable in version control. `scripts/publish-amo.mjs` sends
-`amo/listing.json` with `description` filled in from `amo/description.txt` on
+`amo/listing.json` with `description` filled in from `store/description.txt` on
 every release, so a dashboard edit is overwritten by the next one. `name` comes
 from the manifest.
 
@@ -64,7 +79,7 @@ the reviewer instructions, and the reproducibility check.
    permission needs a current justification and no stale ones.
 2. Confirm the `data_collection_permissions` answer still matches what the code
    does.
-3. Re-read `amo/description.txt` against user-visible behavior changes in the
-   release.
+3. Re-read `store/description.txt` against user-visible behavior changes in the
+   release, remembering the same text is the Chrome listing copy.
 4. Rebuild from a fresh extraction of the source archive and confirm the output
    matches the submitted package.
