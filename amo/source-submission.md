@@ -59,12 +59,14 @@ available without opening the archive.
 The build is deterministic. Verified for this release by extracting the source
 archive into a fresh directory and running the instructions above:
 
-- Node 24.14.0 with Corepack-provisioned pnpm 11.3.0, the reviewer default
-- Node 26.4.0 with pnpm 11.3.0, the local development environment
+- Node 24.18.1 with Corepack-provisioned pnpm 11.3.0, in a `node:24-bookworm`
+  container, the reviewer default
+- Node 26.4.0 with pnpm 11.3.0, on the Arch host, the local development
+  environment
 
-Both produced a `dist-firefox/` identical to the submitted package: same 12
+Both produced a `dist-firefox/` identical to the submitted package: same 14
 files, same SHA-256 for every one. The output is not sensitive to the directory
-the build runs in.
+the build runs in, nor to the host.
 
 Re-run this check before any release that changes dependencies, the Vite config,
 or the manifest config.
