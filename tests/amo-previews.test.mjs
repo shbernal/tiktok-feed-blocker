@@ -2,12 +2,14 @@ import { statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  FALLBACK_THROTTLE_WAIT_MS,
   MAX_IMAGE_BYTES,
   checkImageBytes,
   describePreviewDrift,
   imageContentType,
   parsePreviewManifest,
   planPreviewSync,
+  throttleWaitMs,
 } from '../scripts/amo-previews.mjs'
 import manifest from '../amo/previews.json' with { type: 'json' }
 
@@ -44,6 +46,18 @@ describe('checkImageBytes', () => {
     expect(() => checkImageBytes('a.png', MAX_IMAGE_BYTES + 1)).toThrow(
       /over 4MB/,
     )
+  })
+})
+
+describe('throttleWaitMs', () => {
+  it('waits out the header AMO sends, plus a margin', () => {
+    expect(throttleWaitMs('56')).toBe(57_000)
+  })
+
+  it('falls back when the header is missing or unusable', () => {
+    for (const header of [null, '', 'soon', '0', '-1', 'Infinity']) {
+      expect(throttleWaitMs(header)).toBe(FALLBACK_THROTTLE_WAIT_MS)
+    }
   })
 })
 

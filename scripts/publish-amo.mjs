@@ -16,6 +16,7 @@ import {
   imageContentType,
   parsePreviewManifest,
   planPreviewSync,
+  throttleWaitMs,
 } from './amo-previews.mjs'
 
 const API = 'https://addons.mozilla.org/api/v5'
@@ -176,28 +177,46 @@ const parse = text => {
   }
 }
 
+// A 429 is the one status worth retrying: it says the same request will work
+// shortly, where every other failure says the request is wrong. Uploading
+// previews trips AMO's submission throttle after the first image, so without
+// this a sync of three screenshots can never finish in one run. The token is
+// minted inside the loop because a throttle wait is long enough to matter
+// against its five-minute life.
+const THROTTLE_ATTEMPTS = 5
+
 const request = async (method, endpoint, { json, form } = {}) => {
-  const headers = { Authorization: `JWT ${mintToken()}` }
+  for (let attempt = 1; ; attempt += 1) {
+    const headers = { Authorization: `JWT ${mintToken()}` }
 
-  if (json !== undefined) {
-    headers['Content-Type'] = 'application/json'
+    if (json !== undefined) {
+      headers['Content-Type'] = 'application/json'
+    }
+
+    const response = await fetch(`${API}${endpoint}`, {
+      method,
+      headers,
+      body: json !== undefined ? JSON.stringify(json) : form,
+    })
+
+    const body = parse(await response.text())
+
+    if (response.status === 429 && attempt < THROTTLE_ATTEMPTS) {
+      const wait = throttleWaitMs(response.headers.get('retry-after'))
+
+      console.log(`throttled; retrying in ${Math.round(wait / 1000)}s`)
+      await sleep(wait)
+      continue
+    }
+
+    if (!response.ok) {
+      const detail =
+        typeof body === 'string' ? body : JSON.stringify(body, null, 2)
+      throw new Error(`${method} ${endpoint} → ${response.status}\n${detail}`)
+    }
+
+    return body
   }
-
-  const response = await fetch(`${API}${endpoint}`, {
-    method,
-    headers,
-    body: json !== undefined ? JSON.stringify(json) : form,
-  })
-
-  const body = parse(await response.text())
-
-  if (!response.ok) {
-    const detail =
-      typeof body === 'string' ? body : JSON.stringify(body, null, 2)
-    throw new Error(`${method} ${endpoint} → ${response.status}\n${detail}`)
-  }
-
-  return body
 }
 
 const filePart = (file, type) =>
@@ -334,6 +353,18 @@ const applyListingAssets = async remotePreviews => {
   }
 
   const { uploads, deletes } = planPreviewSync(remotePreviews, manifest)
+
+  // Preview writes are throttled per user at 3/minute, 10/hour and 24/day, and
+  // every call below is an unsafe method, so all of them count. Two calls per
+  // image plus the deletes means a three-screenshot sync nearly exhausts an
+  // hour's budget on its own. Crossing the hourly boundary has been seen to
+  // cost a single wait of just under an hour, so saying this up front is the
+  // difference between a slow run and one that looks hung.
+  console.log(
+    `syncing ${uploads.length} previews in ` +
+      `${uploads.length * 2 + deletes.length} throttled calls; AMO allows 10 ` +
+      'an hour, so a single wait can approach that',
+  )
 
   for (const upload of uploads) {
     const form = new FormData()

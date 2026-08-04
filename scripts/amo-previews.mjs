@@ -75,6 +75,22 @@ export const parsePreviewManifest = (raw, source = 'amo/previews.json') => {
   })
 }
 
+// Creating a preview goes through AMO's add-on submission throttles, and three
+// screenshots is already enough to trip them: the first upload succeeds and the
+// next comes back 429 with a Retry-After of about a minute. DRF sets that header
+// on every throttled response, so the wait is read rather than guessed; the
+// fallback only matters if it ever goes missing. The extra second keeps a
+// rounded-down header from retrying a moment early and burning an attempt.
+export const FALLBACK_THROTTLE_WAIT_MS = 60_000
+
+export const throttleWaitMs = retryAfter => {
+  const seconds = Number(retryAfter)
+
+  return seconds > 0 && Number.isFinite(seconds)
+    ? seconds * 1000 + 1000
+    : FALLBACK_THROTTLE_WAIT_MS
+}
+
 // Identity is the part of this the reconcile cannot solve. AMO re-encodes every
 // image on ingest, so a local file and its published copy never share a hash,
 // and nothing on a preview says which manifest entry produced it. Reusing a

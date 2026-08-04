@@ -86,15 +86,48 @@ on a maiden submission.
 | Icon     | `PATCH /addons/addon/{guid}/` (`icon`) | every release               |
 | Previews | `POST`/`DELETE .../previews/{id}/`     | only with `--sync-previews` |
 
-Captions are a second call. `caption` is writable when a preview is created, but
-a localized value cannot survive multipart without collapsing to a bare string,
-so the image is posted first and the `{"en-US": ...}` caption patched as JSON.
+Captions are a second call — see the throttle note below for why that is forced
+rather than chosen.
 
 Constraints, which the script checks locally so a bad file fails before anything
 is uploaded: PNG or JPEG only, not animated, under 4MB. The icon must also be
 square — AMO enforces that server-side. Previews have no minimum dimension; the
 1000×750 in AMO's documentation is a resize target, not a rejection threshold.
 The three 1280×800 screenshots are accepted as they are.
+
+### Preview Writes Are Throttled Hard
+
+Every call on the previews endpoint is an unsafe method, so all of them count
+against AMO's add-on submission throttles: 3/minute, 10/hour and 24/day per
+user. Reads are free. Syncing three screenshots costs three uploads, three
+caption patches and a delete per superseded image — close to a whole hour's
+budget, and enough to trip the limit partway through.
+
+The script waits out the `Retry-After` header and retries, so a sync works but
+spends most of its wall-clock idle; it prints the call count up front so a slow
+run is not mistaken for a hung one. A 429 is the only status it retries, since
+every other failure means the request itself is wrong. Waits are not short: the
+first real sync was handed a `Retry-After` of 3454 seconds when it crossed the
+hourly boundary, and finished correctly after sitting out the full window.
+
+The throttle is not specific to previews. `AddonViewSet` carries the same
+classes, so the listing `PUT` and the icon `PATCH` draw on one shared budget —
+a release already spends about four calls of the ten. **Do not run a preview
+sync in the same hour as a release**: eight plus four exceeds the cap, and the
+sync is what will stall. This is the other reason `--assets-only` is a separate
+command rather than a flag on the release path.
+
+There is no way to raise the ceiling. `GranularUserRateThrottle` honors one
+bypass, the `API_BYPASS_THROTTLING` permission, and that is a group membership
+granted to Mozilla's own release-engineering and QA accounts — not something a
+token, key, or scope can obtain. The throttle keys on the authenticated user
+with independent per-IP limits on top, so re-minting credentials changes
+nothing. The only lever is making fewer calls.
+
+The two calls per image are not avoidable. `caption` is writable when a preview
+is created, but `TranslationSerializerField` deserializes a dictionary only —
+a bare string needs the `l10n_flat_input_output` gate — and multipart cannot
+carry one, so the localized caption has to follow as JSON.
 
 ### Why Previews Are Opt-In
 
