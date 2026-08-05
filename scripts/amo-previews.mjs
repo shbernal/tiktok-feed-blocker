@@ -91,6 +91,74 @@ export const throttleWaitMs = retryAfter => {
     : FALLBACK_THROTTLE_WAIT_MS
 }
 
+// Waits here span seconds to most of a day, so one unit reads badly at one end
+// or the other.
+export const describeWait = ms => {
+  const seconds = Math.round(ms / 1000)
+
+  if (seconds < 60) {
+    return `${seconds}s`
+  }
+
+  const minutes = Math.round(seconds / 60)
+
+  if (minutes < 60) {
+    return `${minutes}m`
+  }
+
+  const remainder = minutes % 60
+
+  return remainder === 0
+    ? `${minutes / 60}h`
+    : `${Math.floor(minutes / 60)}h${remainder}m`
+}
+
+// Which bucket a 429 came from changes `Retry-After` by four orders of
+// magnitude, and only some of them are worth waiting out. The per-minute limit
+// answers in about a minute; crossing the hourly boundary has answered with
+// 3454 seconds and then completed correctly. The daily limit answers with
+// whatever is left of its 24 hours, and that is not a wait, it is a different
+// day. Release 1.4.1 slept on a `Retry-After` of 52277 seconds inside a job
+// GitHub cancels at six: it spent a whole runner, created no version, and the
+// only account of why was a log line six hours above the failure. Past the cap
+// the run fails at once and says when the bucket refills.
+//
+// The ceiling has to clear the hourly boundary, which is the longest wait that
+// is still a real wait, with margin for one that lands somewhat worse.
+export const MAX_THROTTLE_WAIT_MS = 70 * 60_000
+
+// Per-wait is not enough by itself: several waits each under the ceiling still
+// add up past the job serving them. This bounds the run rather than the call.
+export const MAX_THROTTLE_TOTAL_MS = 2 * 60 * 60_000
+
+export const planThrottleRetry = (
+  retryAfter,
+  { attempt, attempts, waited = 0 },
+) => {
+  const wait = throttleWaitMs(retryAfter)
+  const stop = reason => ({ retry: false, wait, reason })
+
+  if (attempt >= attempts) {
+    return stop(`${attempts} throttled attempts is the limit`)
+  }
+
+  if (wait > MAX_THROTTLE_WAIT_MS) {
+    return stop(
+      `AMO asked for ${describeWait(wait)}, past the ` +
+        `${describeWait(MAX_THROTTLE_WAIT_MS)} a single wait may take`,
+    )
+  }
+
+  if (waited + wait > MAX_THROTTLE_TOTAL_MS) {
+    return stop(
+      `another ${describeWait(wait)} would put this run past the ` +
+        `${describeWait(MAX_THROTTLE_TOTAL_MS)} it may spend throttled`,
+    )
+  }
+
+  return { retry: true, wait }
+}
+
 // Identity is the part of this the reconcile cannot solve. AMO re-encodes every
 // image on ingest, so a local file and its published copy never share a hash,
 // and nothing on a preview says which manifest entry produced it. Reusing a

@@ -112,6 +112,18 @@ every other failure means the request itself is wrong. Waits are not short: the
 first real sync was handed a `Retry-After` of 3454 seconds when it crossed the
 hourly boundary, and finished correctly after sitting out the full window.
 
+It does not wait out all of them. Which bucket was hit changes the header by
+four orders of magnitude, and the daily one answers with whatever is left of its
+24 hours — that is not a wait, it is a different day. Release 1.4.1 was handed
+52277 seconds by it and slept, inside a GitHub job that is cancelled at six
+hours: a whole runner spent, no version created, and the reason visible only in
+a log line six hours above the failure. `planThrottleRetry` in
+`scripts/amo-previews.mjs` now caps a single wait at 70 minutes — clear of the
+hourly boundary, which is the longest wait that is still a real one — and caps
+what one run may spend throttled at two hours, since waits under the ceiling
+still add up past the job serving them. Past either, the run fails at once and
+prints when the bucket refills, so the answer is to re-run it after that.
+
 The throttle is not specific to previews. `AddonViewSet` carries the same
 classes, so the listing `PUT` and the icon `PATCH` draw on one shared budget —
 a release already spends about four calls of the ten. **Do not run a preview

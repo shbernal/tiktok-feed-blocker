@@ -13,10 +13,11 @@ import { printHelpAndExit } from './help.mjs'
 import {
   checkImageBytes,
   describePreviewDrift,
+  describeWait,
   imageContentType,
   parsePreviewManifest,
   planPreviewSync,
-  throttleWaitMs,
+  planThrottleRetry,
 } from './amo-previews.mjs'
 
 const API = 'https://addons.mozilla.org/api/v5'
@@ -184,9 +185,15 @@ const parse = text => {
 // this a sync of three screenshots can never finish in one run. The token is
 // minted inside the loop because a throttle wait is long enough to matter
 // against its five-minute life.
+//
+// "Shortly" is the load-bearing word, and `planThrottleRetry` is what holds it:
+// a 429 that will not clear inside this run is a failure to report, not a wait
+// to sit out. See `MAX_THROTTLE_WAIT_MS`.
 const THROTTLE_ATTEMPTS = 5
 
 const request = async (method, endpoint, { json, form } = {}) => {
+  let waited = 0
+
   for (let attempt = 1; ; attempt += 1) {
     const headers = { Authorization: `JWT ${mintToken()}` }
 
@@ -202,12 +209,26 @@ const request = async (method, endpoint, { json, form } = {}) => {
 
     const body = parse(await response.text())
 
-    if (response.status === 429 && attempt < THROTTLE_ATTEMPTS) {
-      const wait = throttleWaitMs(response.headers.get('retry-after'))
+    if (response.status === 429) {
+      const { retry, wait, reason } = planThrottleRetry(
+        response.headers.get('retry-after'),
+        { attempt, attempts: THROTTLE_ATTEMPTS, waited },
+      )
 
-      console.log(`throttled; retrying in ${Math.round(wait / 1000)}s`)
-      await sleep(wait)
-      continue
+      if (retry) {
+        console.log(`throttled; retrying in ${describeWait(wait)}`)
+        waited += wait
+        await sleep(wait)
+        continue
+      }
+
+      const clearsAt = new Date(Date.now() + wait).toISOString()
+
+      throw new Error(
+        `${method} ${endpoint} → 429 throttled by AMO; ${reason}.\n` +
+          `The limit clears around ${clearsAt}. Nothing was submitted; ` +
+          're-run this job after that.',
+      )
     }
 
     if (!response.ok) {

@@ -4,11 +4,15 @@ import { describe, expect, it } from 'vitest'
 import {
   FALLBACK_THROTTLE_WAIT_MS,
   MAX_IMAGE_BYTES,
+  MAX_THROTTLE_TOTAL_MS,
+  MAX_THROTTLE_WAIT_MS,
   checkImageBytes,
   describePreviewDrift,
+  describeWait,
   imageContentType,
   parsePreviewManifest,
   planPreviewSync,
+  planThrottleRetry,
   throttleWaitMs,
 } from '../scripts/amo-previews.mjs'
 import manifest from '../amo/previews.json' with { type: 'json' }
@@ -58,6 +62,65 @@ describe('throttleWaitMs', () => {
     for (const header of [null, '', 'soon', '0', '-1', 'Infinity']) {
       expect(throttleWaitMs(header)).toBe(FALLBACK_THROTTLE_WAIT_MS)
     }
+  })
+})
+
+describe('describeWait', () => {
+  it('picks a unit that reads at the length it is given', () => {
+    expect(describeWait(57_000)).toBe('57s')
+    expect(describeWait(3_455_000)).toBe('58m')
+    expect(describeWait(2 * 60 * 60_000)).toBe('2h')
+    expect(describeWait(52_278_000)).toBe('14h31m')
+  })
+})
+
+describe('planThrottleRetry', () => {
+  const at = (retryAfter, extra = {}) =>
+    planThrottleRetry(retryAfter, { attempt: 1, attempts: 5, ...extra })
+
+  it('waits out the per-minute limit', () => {
+    expect(at('56')).toEqual({ retry: true, wait: 57_000 })
+  })
+
+  // The wait an hourly-boundary crossing actually produced, which then
+  // completed correctly. Refusing it would break preview syncing.
+  it('waits out an hourly-boundary crossing', () => {
+    expect(at('3454')).toEqual({ retry: true, wait: 3_455_000 })
+  })
+
+  // The one that cancelled release 1.4.1 after six hours on a runner.
+  it('refuses a wait that is really a different day', () => {
+    const { retry, wait, reason } = at('52277')
+
+    expect(retry).toBe(false)
+    expect(wait).toBe(52_278_000)
+    expect(reason).toContain('14h31m')
+  })
+
+  it('refuses a wait one second past the ceiling', () => {
+    expect(at(String(MAX_THROTTLE_WAIT_MS / 1000)).retry).toBe(false)
+    expect(at(String(MAX_THROTTLE_WAIT_MS / 1000 - 1)).retry).toBe(true)
+  })
+
+  // Each wait below clears the per-wait ceiling on its own; what they cannot
+  // clear is the run they are being spent from.
+  it('refuses waits that only add up to too long', () => {
+    const waited = MAX_THROTTLE_TOTAL_MS - 60_000
+    const { retry, reason } = at('3454', { waited })
+
+    expect(retry).toBe(false)
+    expect(reason).toContain('2h')
+  })
+
+  it('stops once the attempts are spent', () => {
+    expect(at('56', { attempt: 5 }).retry).toBe(false)
+    expect(at('56', { attempt: 5 }).reason).toContain('5 throttled attempts')
+  })
+
+  // A missing header falls back to a minute, which must stay retryable: the
+  // fallback exists for a throttle that would have cleared quickly.
+  it('waits out a throttle that sent no header', () => {
+    expect(at(null)).toEqual({ retry: true, wait: FALLBACK_THROTTLE_WAIT_MS })
   })
 })
 

@@ -104,15 +104,30 @@ jobs:
         run: |
           item="publishers/${CWS_PUBLISHER_ID}/items/${CWS_EXTENSION_ID}"
 
-          curl --fail-with-body -sS \
-            -H "Authorization: Bearer ${TOKEN}" \
-            -H "Content-Type: application/zip" \
-            -X POST \
-            -T "${ZIP_FILE}" \
-            "https://chromewebstore.googleapis.com/upload/v2/${item}:upload" \
-            > upload-response.json
+          # `--fail-with-body` writes the body and then exits non-zero, which
+          # under `set -e` aborted the step before the line that printed it. The
+          # 400 that stopped release 1.4.1 left nothing behind but "curl: (22)",
+          # and the store's account of why is the only thing that step exists to
+          # report. Taking the status from `-w` instead keeps the body on the
+          # way out, whether or not it is JSON.
+          status="$(
+            curl -sS \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/zip" \
+              -X POST \
+              -T "${ZIP_FILE}" \
+              -o upload-response.json \
+              -w '%{http_code}' \
+              "https://chromewebstore.googleapis.com/upload/v2/${item}:upload"
+          )"
 
-          node -e "console.log(JSON.stringify(require('./upload-response.json'), null, 2))"
+          echo "Upload responded HTTP ${status}"
+          cat upload-response.json
+          echo
+
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            exit 1
+          fi
 
       - name: Wait for upload processing
         env:
@@ -133,12 +148,23 @@ jobs:
             exit 1
           fi
 
+          # Same reason as the upload step: a non-2xx here has to print the
+          # body, not just end the loop.
           for attempt in $(seq 1 30); do
-            curl --fail-with-body -sS \
-              -H "Authorization: Bearer ${TOKEN}" \
-              -X GET \
-              "https://chromewebstore.googleapis.com/v2/${item}:fetchStatus" \
-              > status-response.json
+            status="$(
+              curl -sS \
+                -H "Authorization: Bearer ${TOKEN}" \
+                -X GET \
+                -o status-response.json \
+                -w '%{http_code}' \
+                "https://chromewebstore.googleapis.com/v2/${item}:fetchStatus"
+            )"
+
+            if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+              echo "fetchStatus responded HTTP ${status}"
+              cat status-response.json
+              exit 1
+            fi
 
             state="$(node -p "require('./status-response.json').lastAsyncUploadState || ''")"
             echo "Upload state: ${state:-unknown}"

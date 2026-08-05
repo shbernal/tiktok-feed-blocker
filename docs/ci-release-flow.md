@@ -62,6 +62,13 @@ The release job:
 9. Submits the item for publishing.
 10. Uploads the zip as a GitHub Release asset.
 
+The two steps that write a response to a file take the status from curl's
+`-w '%{http_code}'` rather than from `--fail-with-body`. With `--fail-with-body`
+the body lands in the file and curl exits non-zero, which under the default
+`bash -e` aborts the step before anything prints it — release 1.4.1 failed on a
+400 whose message was never shown. Whatever Chrome answers with is printed
+before the status is checked.
+
 Release tags should use a leading `v`, for example `v1.2.0`. The workflow strips
 the leading `v` and requires the remaining value to match `package.json`
 exactly. For `v1.2.0`, `package.json` must contain `"version": "1.2.0"`.
@@ -107,6 +114,12 @@ visible. Apply one by hand with `pnpm publish:amo --assets-only
 
 Every request mints its own JWT. AMO caps a token's lifetime at five minutes
 past issue, which is shorter than validation polling can run.
+
+A 429 is retried, but only when the wait is one this run can actually serve: a
+single wait is capped at 70 minutes and a whole run at two hours. Anything
+longer is a throttle bucket that refills on a scale a GitHub job does not live
+on, so the run fails and prints the time to re-run after. See
+[Preview Writes Are Throttled Hard](amo-listing.md#preview-writes-are-throttled-hard).
 
 A listed AMO version is queued for human review and does not go live on
 submission. The successful outcome is a file status of `unreviewed`, which the
@@ -206,13 +219,50 @@ path.
 Both stores reject reused extension versions, so every release must bump
 `package.json` before publishing.
 
+## When A Publish Job Fails
+
+The two publish jobs are independent, and a store that rejected a submission
+usually has not recorded the version at all. Re-run the failed job rather than
+cutting a new tag:
+
+```sh
+gh run rerun <run-id> --repo shbernal/tiktok-feed-blocker
+```
+
+A re-run replays the original commit, so it does not pick up a fix pushed to
+`main` afterwards — that only reaches the next release. What it is for is a
+store-side condition that has since cleared.
+
+Two of those are known:
+
+- **AMO throttled the submission.** The failure prints when the bucket refills;
+  re-run after that. AMO's daily add-on-submission budget is per user and a
+  release spends about four calls, so a release cut within a day of the last one
+  can land on it.
+- **Chrome answered 400 on the upload.** Read the message the step now prints
+  before assuming anything. Release 1.4.1 hit one while 1.4.0 was still in
+  review and its body was discarded, so whether Chrome refuses an upload against
+  an item with a pending submission is a guess that was never settled — if it
+  recurs, the log will say. Check what is actually live first:
+
+  ```sh
+  curl -sI "https://clients2.google.com/service/update2/crx?response=redirect\
+  ```
+
+&prodversion=200&acceptformat=crx3&x=id%3D<extension-id>%26uc" | grep -i location
+
+````
+
+Neither case burns the version number: nothing was created on either store, so
+the same tag can be re-run until it lands.
+
 ## Useful Checks
 
 List recent runs:
 
 ```sh
 gh run list --repo shbernal/tiktok-feed-blocker --limit 10
-```
+````
 
 Watch a run:
 
