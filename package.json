@@ -36,20 +36,8 @@
     "e2e:real:open": "node scripts/open-real-tiktok.mjs",
     "e2e:real:open:extension": "tsc -b && vite build && TIKTOK_REAL_OPEN_EXTENSION=1 node scripts/open-real-tiktok.mjs",
     "manual:tiktok": "tsc -b && vite build && playwright test -c playwright.manual.config.ts --headed",
-    "format": "prettier --check .",
+    "format": "oxfmt --check .",
     "preview": "vite preview"
-  },
-  "prettier": {
-    "semi": false,
-    "singleQuote": true,
-    "trailingComma": "all",
-    "printWidth": 80,
-    "tabWidth": 2,
-    "useTabs": false,
-    "bracketSpacing": true,
-    "bracketSameLine": false,
-    "arrowParens": "avoid",
-    "endOfLine": "lf"
   },
   "dependencies": {
     "react": "^19.2.8",
@@ -68,7 +56,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^4.1.11",
     "jsdom": "^30.0.1",
-    "prettier": "^3.9.6",
+    "oxfmt": "^0.66.0",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11",

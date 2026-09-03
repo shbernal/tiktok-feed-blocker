@@ -169,7 +169,8 @@ old set. Regenerate after any selector change:
 UPDATE_BLOCKING_CSS=1 pnpm test blocking-css
 ```
 
-The file is in `.prettierignore`, because the guard compares exact bytes.
+The file is in `ignorePatterns` in `.oxfmtrc.json`, because the guard compares
+exact bytes.
 Importing the builder is also why `tsconfig.node.json` includes the `DOM` lib.
 
 `tests/manifest-entry-names.test.ts` fails if two script entries in

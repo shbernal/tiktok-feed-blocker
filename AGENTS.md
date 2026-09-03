@@ -55,7 +55,7 @@ Use `pnpm`.
 - `pnpm test` - run the Vitest suite once.
 - `pnpm test:watch` - run Vitest in watch mode.
 - `pnpm test:coverage` - run tests with V8 coverage output.
-- `pnpm format` - check Prettier formatting.
+- `pnpm format` - check formatting with oxfmt.
 - `pnpm dev` - start the Vite dev server for extension development.
 - `pnpm preview` - preview the Vite build.
 
@@ -69,7 +69,7 @@ healthy.
 ## Coding Guidelines
 
 - Keep changes narrow and follow the existing TypeScript style: strict types,
-  no semicolons, single quotes, 2-space indentation, and 80-column Prettier
+  no semicolons, single quotes, 2-space indentation, and 80-column oxfmt
   wrapping.
 - Prefer shared helpers in `src/shared/settings.ts` for storage shape changes.
   Preserve migration support for `LEGACY_ACTIVE_STORAGE_KEY` unless the user

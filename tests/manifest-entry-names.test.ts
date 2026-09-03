@@ -12,7 +12,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 // themselves.
 type ScriptManifest = {
   background?:
-    { service_worker: string } | { scripts: string[] } | Record<string, unknown>
+    | { service_worker: string }
+    | { scripts: string[] }
+    | Record<string, unknown>
   content_scripts?: { js?: string[] }[]
 }
 

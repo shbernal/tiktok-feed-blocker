@@ -255,7 +255,8 @@ the `document_start` sheet blocking the old set. After editing `selectors.ts` or
 UPDATE_BLOCKING_CSS=1 pnpm test blocking-css
 ```
 
-It is listed in `.prettierignore` because that guard compares exact bytes.
+It is listed in `ignorePatterns` in `.oxfmtrc.json` because that guard
+compares exact bytes.
 
 That guard is also why `tsconfig.node.json` includes the `DOM` lib: `tests/` is
 in that project and imports the stylesheet builder, which sits alongside DOM

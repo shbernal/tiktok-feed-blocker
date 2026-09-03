@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": false,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "printWidth": 80,
+  "tabWidth": 2,
+  "useTabs": false,
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "avoid",
+  "endOfLine": "lf",
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "dist/",
+    "node_modules/",
+    "pnpm-lock.yaml",
+    "README.md",
+    // Generated from src/content/blockingStyles.ts and checked byte-for-byte
+    // by tests/blocking-css.test.ts. Reformatting it here would fail that
+    // guard.
+    "src/content/blocking.css"
+  ]
+}
