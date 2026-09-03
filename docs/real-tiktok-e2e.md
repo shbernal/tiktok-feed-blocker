@@ -200,6 +200,7 @@ Before relying on a real profile for selector checks, run:
 
 ```bash
 pnpm format
+pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build

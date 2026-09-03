@@ -36,6 +36,7 @@
     "e2e:real:open": "node scripts/open-real-tiktok.mjs",
     "e2e:real:open:extension": "tsc -b && vite build && TIKTOK_REAL_OPEN_EXTENSION=1 node scripts/open-real-tiktok.mjs",
     "manual:tiktok": "tsc -b && vite build && playwright test -c playwright.manual.config.ts --headed",
+    "lint": "oxlint",
     "format": "oxfmt --check .",
     "preview": "vite preview"
   },
@@ -57,6 +58,7 @@
     "@vitest/coverage-v8": "^4.1.11",
     "jsdom": "^30.0.1",
     "oxfmt": "^0.66.0",
+    "oxlint": "^1.81.0",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11",

@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "oxc",
+    "react",
+    "jsx-a11y",
+    "import",
+    "promise",
+    "vitest"
+  ],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    // Every vi.fn() in src/test/chrome.ts stands in for a chrome.* callback
+    // whose shape the test already asserts. Naming each one again as a type
+    // parameter is noise, not safety.
+    "vitest/require-mock-type-parameters": "off"
+  },
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": ["dist/", "dist-firefox/", "release/", "coverage/"],
+  "overrides": [
+    {
+      // Playwright spells "this fixture depends on no other fixture" as an
+      // empty destructuring pattern, and parses that signature to build the
+      // dependency graph. Rewriting it would change what Playwright injects.
+      "files": ["e2e/**"],
+      "rules": {
+        "no-empty-pattern": "off"
+      }
+    }
+  ]
+}

@@ -14,12 +14,18 @@ The `validate` job:
 3. Sets up Node `24` with pnpm caching.
 4. Installs dependencies with `pnpm install --frozen-lockfile`.
 5. Runs `pnpm format`.
-6. Runs `pnpm typecheck`.
-7. Runs `pnpm test:coverage`, which enforces the coverage thresholds in
+6. Runs `pnpm lint`, which is oxlint over the source tree.
+7. Runs `pnpm typecheck`.
+8. Runs `pnpm test:coverage`, which enforces the coverage thresholds in
    `vitest.config.ts`.
-8. Runs `pnpm build`.
-9. Runs `pnpm lint:firefox`, which builds the Firefox target and validates it
-   with `web-ext lint`.
+9. Runs `pnpm build`.
+10. Runs `pnpm lint:firefox`, which builds the Firefox target and validates it
+    with `web-ext lint`.
+
+`pnpm format` is oxfmt and `pnpm lint` is oxlint; both replaced Prettier and
+carry their settings in `.oxfmtrc.json` and `.oxlintrc.json`. Those files take
+comments, and the two rule exemptions in `.oxlintrc.json` explain themselves
+there rather than here.
 
 The `e2e` job runs the mock-backed Playwright suite (`e2e/specs/`) separately,
 so a browser-level flake reddens only the end-to-end signal and leaves the
@@ -52,7 +58,8 @@ The publish workflow uses the GitHub environment `chrome-web-store`.
 The release job:
 
 1. Checks out the release tag.
-2. Runs the same install, format, typecheck, test, and build gates as CI.
+2. Runs the same install, format, lint, typecheck, test, and build gates as
+   CI.
 3. Verifies the configured GitHub repository variables are present.
 4. Verifies the release tag matches `package.json`.
 5. Zips the generated `dist/` directory.
@@ -81,7 +88,7 @@ The AMO workflow uses the GitHub environment `addons-mozilla-org`.
 The release job:
 
 1. Checks out the release tag.
-2. Runs the same install, format, typecheck, and test gates as CI.
+2. Runs the same install, format, lint, typecheck, and test gates as CI.
 3. Verifies the release tag matches `package.json`.
 4. Runs `pnpm package:source`, which archives the checked-out tag.
 5. Runs `pnpm package:firefox` and validates the result with `web-ext lint`.
@@ -189,6 +196,7 @@ path.
 
    ```sh
    pnpm format
+   pnpm lint
    pnpm typecheck
    pnpm test
    pnpm e2e

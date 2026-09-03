@@ -47,6 +47,7 @@ Use `pnpm`.
 - `pnpm build` - run TypeScript project build and create the Chrome extension
   build in `dist/`.
 - `pnpm build:firefox` - build the Firefox target in `dist-firefox/`.
+- `pnpm lint` - run oxlint over the source tree.
 - `pnpm lint:firefox` - build the Firefox target and check it with
   `web-ext lint`. Zero errors is the bar; a few warnings are expected.
 - `pnpm validate:firefox` - drive the built Firefox package in a real Firefox
@@ -59,12 +60,12 @@ Use `pnpm`.
 - `pnpm dev` - start the Vite dev server for extension development.
 - `pnpm preview` - preview the Vite build.
 
-For code changes, run at least `pnpm typecheck` and `pnpm test`; run
-`pnpm build` when touching manifest, content script, background script, popup,
-shared settings, icons, or packaging behavior. Also run `pnpm lint:firefox` when
-touching the manifest or packaging — Gecko rejects manifest keys Chrome accepts,
-so the Firefox target can break on a change that leaves the Chrome build
-healthy.
+For code changes, run at least `pnpm lint`, `pnpm typecheck`, and `pnpm test`;
+run `pnpm build` when touching manifest, content script, background script,
+popup, shared settings, icons, or packaging behavior. Also run
+`pnpm lint:firefox` when touching the manifest or packaging — Gecko rejects
+manifest keys Chrome accepts, so the Firefox target can break on a change that
+leaves the Chrome build healthy.
 
 ## Coding Guidelines
 
