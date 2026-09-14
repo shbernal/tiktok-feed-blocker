@@ -1,46 +1,44 @@
-# Chrome Web Store Listing
+# Chrome Web Store listing
 
-Chrome-specific listing assets live in `chrome-web-store/`.
+`chrome-web-store/` holds the Chrome-only listing assets.
 
-- `chrome-web-store/privacy-justifications.md` contains paste-ready privacy,
+- `chrome-web-store/privacy-justifications.md` has paste-ready privacy,
   single-purpose, permission, and host-permission justifications for the
   Developer Dashboard privacy form.
 
-Neither the long description nor the screenshots are in this directory. Both are
-shared with the AMO listing and live under `store/`: `store/description.txt` and
-`store/screenshots/`. Edit them there. AMO captions and orders the same images
-through `amo/previews.json`; the Chrome listing takes them as-is.
+The long description and the screenshots live under `store/`, because the AMO
+listing uses the same ones: `store/description.txt` and `store/screenshots/`.
+Edit them there. AMO captions and orders the images through `amo/previews.json`.
+Chrome takes them as they are.
 
-## The Description Is A Manual Paste
+## The description is a manual paste
 
-Nothing in CI sends listing copy to the Chrome Web Store.
+No CI step sends listing copy to the Chrome Web Store.
 `.github/workflows/publish-cws.yml` uploads the package, waits for processing,
-and publishes — it never touches the item's listing metadata. So a change to
+and publishes. It never touches the listing metadata. A change to
 `store/description.txt` reaches Chrome only when someone pastes it into the
-Developer Dashboard, and a description-only change still puts the item back
+Developer Dashboard, and a description-only change still sends the item back
 through Chrome review.
 
-This is the opposite of AMO, where `scripts/publish-amo.mjs` reapplies the same
-file on every release. Expect the Chrome listing to lag the repository between a
-copy edit and the next dashboard visit; that lag is the reason to check the
-description during a release rather than assuming it shipped.
+AMO works the other way: `scripts/publish-amo.mjs` reapplies the same file on
+every release. So the Chrome listing lags the repository between a copy edit and
+the next dashboard visit. Check the description during each release instead of
+assuming it shipped.
 
-Before a release, review the listing copy against user-visible behavior changes.
-For content controls shown inside TikTok pages, keep the listing focused on the
-control outcome rather than implementation details.
+Before a release, compare the listing copy with user-visible behavior changes.
+For controls shown inside TikTok pages, describe what the user gets, not how the
+extension does it.
 
-## Privacy Form Process
+## Privacy form process
 
-Before filling the Developer Dashboard privacy form:
+Before filling in the Developer Dashboard privacy form:
 
-1. Compare `manifest.config.ts` against
+1. Compare `manifest.config.ts` with
    `chrome-web-store/privacy-justifications.md`.
-2. Check that every manifest `permissions`, `host_permissions`, and
-   `content_scripts.matches` entry has a matching justification.
-3. Remove justification text for permissions that are no longer in the
-   manifest, and remove manifest permissions that no longer support the single
-   purpose.
-4. Re-read the popup, background, content script, and shared settings behavior
-   before submitting claims about local storage, host access, or data handling.
-5. Keep every dashboard answer under the field limit shown in the Developer
-   Dashboard.
+2. Check that every `permissions`, `host_permissions`, and
+   `content_scripts.matches` entry in the manifest has a justification.
+3. Delete justifications for permissions the manifest no longer has, and delete
+   manifest permissions the single purpose no longer needs.
+4. Re-read the popup, background, content script, and shared settings code
+   before making claims about local storage, host access, or data handling.
+5. Keep every answer under the field limit the Developer Dashboard shows.
