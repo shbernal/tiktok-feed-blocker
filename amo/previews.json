@@ -2,17 +2,29 @@
   {
     "file": "store/screenshots/tiktok-feedblocker-1.png",
     "caption": {
-      "en-US": "Blocking Home clears the For You feed and leaves an in-page switch to bring it back."
+      "en-US": "Blocking Home hides the For You feed and mutes it. The rest of TikTok stays reachable."
     }
   },
   {
     "file": "store/screenshots/tiktok-feedblocker-2.png",
     "caption": {
-      "en-US": "Explore and Live work the same way, and the popup toggles every page at once or one at a time."
+      "en-US": "A blocked page shows a switch to bring it back. An unblocked page keeps a button in the corner to block it again."
     }
   },
   {
     "file": "store/screenshots/tiktok-feedblocker-3.png",
+    "caption": {
+      "en-US": "Explore and LIVE are blocked and muted the same way."
+    }
+  },
+  {
+    "file": "store/screenshots/tiktok-feedblocker-4.png",
+    "caption": {
+      "en-US": "The popup switches each page separately, and Ctrl+Shift+8 toggles the page you are on. Settings never leave your browser."
+    }
+  },
+  {
+    "file": "store/screenshots/tiktok-feedblocker-5.png",
     "caption": {
       "en-US": "Open source at github.com/shbernal/tiktok-feed-blocker."
     }

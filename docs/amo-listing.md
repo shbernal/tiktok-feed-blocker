@@ -15,7 +15,7 @@ the Chrome-only ones. Copy both stores publish verbatim lives once in `store/`.
 - `amo/source-submission.md` has the reviewer build instructions and how to
   produce the source archive.
 
-`store/screenshots/` holds the three screenshots both stores use. AMO has no
+`store/screenshots/` holds the screenshots both stores use. AMO has no
 promo-tile requirement, so it needs nothing the Chrome listing lacks. Don't copy
 those files into `amo/` and don't regenerate them for AMO. `amo/previews.json`
 points at them where they are. It stays in `amo/` because its localized captions
@@ -91,15 +91,16 @@ The script checks these constraints locally, so a bad file fails before any
 upload: PNG or JPEG only, not animated, under 4MB. The icon must also be square,
 which AMO enforces server-side. Previews have no minimum size. The 1000×750 in
 AMO's documentation is a resize target, not a rejection threshold, and AMO
-accepts the three 1280×800 screenshots as they are.
+accepts the 1280×800 screenshots as they are.
 
 ### Preview writes are throttled hard
 
 Every call on the previews endpoint uses an unsafe method, so all of them count
 against AMO's add-on submission throttles: 3 per minute, 10 per hour, and 24 per
-day per user. Reads are free. Syncing three screenshots costs three uploads,
-three caption patches, and one delete per replaced image. That is close to a
-whole hour's budget and enough to hit the limit partway through.
+day per user. Reads are free. Syncing five screenshots costs five uploads, five
+caption patches, and one delete per image already published. Replacing a
+published set of five is 15 calls, half again an hour's budget, so a sync always
+hits the limit partway through.
 
 The script waits out the `Retry-After` header and retries, so a sync works but
 spends most of its time idle. It prints the call count up front so a slow run
