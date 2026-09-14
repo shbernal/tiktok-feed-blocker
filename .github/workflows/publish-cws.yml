@@ -99,6 +99,54 @@ jobs:
           token_format: access_token
           access_token_scopes: https://www.googleapis.com/auth/chromewebstore
 
+      # Chrome answers an upload against an item with a submission still in
+      # review with a 400. Release 1.4.1 was cut nine hours after 1.4.0 and
+      # never reached Chrome because of it, and a GitHub run can only be
+      # re-run for 30 days. Failing here names the pending version instead.
+      - name: Check for a pending submission
+        env:
+          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          item="publishers/${CWS_PUBLISHER_ID}/items/${CWS_EXTENSION_ID}"
+
+          status="$(
+            curl -sS \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -o item-status.json \
+              -w '%{http_code}' \
+              "https://chromewebstore.googleapis.com/v2/${item}:fetchStatus"
+          )"
+
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "fetchStatus responded HTTP ${status}"
+            cat item-status.json
+            exit 1
+          fi
+
+          node -e '
+            const s = require("./item-status.json")
+            const describe = r =>
+              r
+                ? `${r.state} ${(r.distributionChannels ?? [])
+                    .map(c => c.crxVersion)
+                    .join(", ")}`
+                : "none"
+            console.log(`Published: ${describe(s.publishedItemRevisionStatus)}`)
+            console.log(`Submitted: ${describe(s.submittedItemRevisionStatus)}`)
+
+            const pending = s.submittedItemRevisionStatus
+            if (pending && ["PENDING_REVIEW", "STAGED"].includes(pending.state)) {
+              console.log(
+                `::error::A submission is still ${pending.state}. Wait for ` +
+                  "its review to finish, or cancel it in the Developer " +
+                  "Dashboard (or POST :cancelSubmission), then re-run.",
+              )
+              process.exit(1)
+            }
+          '
+
       - name: Upload package to Chrome Web Store
         env:
           CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
