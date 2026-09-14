@@ -38,6 +38,7 @@
     "manual:tiktok": "tsc -b && vite build && playwright test -c playwright.manual.config.ts --headed",
     "media:capture": "tsc -b && vite build && bash scripts/capture-media.sh capture",
     "media:encode": "bash scripts/capture-media.sh encode",
+    "media:store": "bash scripts/capture-media.sh store",
     "lint": "oxlint",
     "format": "oxfmt --check .",
     "preview": "vite preview"

@@ -207,7 +207,10 @@ context = await chromium.launchPersistentContext(profile, {
 context.setDefaultTimeout(15_000)
 context.setDefaultNavigationTimeout(30_000)
 await context.addInitScript(demoInit)
-await (context.serviceWorkers()[0] ?? context.waitForEvent('serviceworker'))
+// Read the id now: an idle MV3 worker can be gone by the end of the run.
+const worker =
+  context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
+const extensionId = new URL(worker.url()).hostname
 
 const page = await context.newPage()
 
@@ -409,5 +412,26 @@ fs.writeFileSync(
   ),
 )
 log('frames', frames.length)
+
+// The popup at 2x for the store screenshots. It reads the storage the demo
+// just wrote, which ends with every page blocked.
+const popup = await context.newPage()
+await popup.goto(`chrome-extension://${extensionId}/src/popup/index.html`)
+const popupBox = await popup.locator('.popup-container').boundingBox()
+const popupCdp = await context.newCDPSession(popup)
+await popupCdp.send('Emulation.setDeviceMetricsOverride', {
+  width: 320,
+  height: Math.ceil(popupBox.height),
+  deviceScaleFactor: 2,
+  mobile: false,
+})
+const { data: popupPng } = await popupCdp.send('Page.captureScreenshot', {
+  format: 'png',
+})
+fs.writeFileSync(
+  path.join(outDir, 'popup.png'),
+  Buffer.from(popupPng, 'base64'),
+)
+log('still popup')
 
 await shutdown(0, 'done')

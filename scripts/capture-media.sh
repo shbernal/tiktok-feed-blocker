@@ -27,8 +27,12 @@ case $stage in
     script=scripts/capture-media-encode.mjs
     runtime=180
     ;;
+  store)
+    script=scripts/capture-media-store.mjs
+    runtime=120
+    ;;
   *)
-    echo "Usage: scripts/capture-media.sh capture|encode [--help]" >&2
+    echo "Usage: scripts/capture-media.sh capture|encode|store [--help]" >&2
     exit 2
     ;;
 esac
