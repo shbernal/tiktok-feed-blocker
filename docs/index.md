@@ -22,6 +22,9 @@ marketing or install copy belongs elsewhere unless a task asks for it here.
   privacy form justifications, and the assets the store listing uses.
 - [AMO listing](./amo-listing.md) covers the addons.mozilla.org listing copy,
   metadata, data-collection answer, and the source-submission requirement.
+- [Media capture](./media-capture.md) covers how the README demo and the store
+  screenshot stills are recorded on real TikTok, and why that runs in a capped
+  systemd unit.
 
 When a change touches behavior, the settings shape, Chrome API usage, or the
 test harness, check these docs in the same change.

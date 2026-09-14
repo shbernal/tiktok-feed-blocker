@@ -34,7 +34,8 @@ addons.mozilla.org, and the same source tree builds both packages.
 - `amo/` contains the AMO-specific listing metadata, the previews manifest that
   captions and orders `store/screenshots/`, the data-collection answer, and
   reviewer build instructions.
-- `scripts/` contains the packaging and publishing scripts run by CI.
+- `scripts/` contains the packaging and publishing scripts run by CI, and the
+  media capture scripts behind the README and store images.
 - `tests/` contains source-convention guards that run in the same Vitest command
   as the unit tests.
 - `dist/`, `dist-firefox/`, and `release/` are generated/packaged outputs and are
@@ -59,6 +60,10 @@ Use `pnpm`.
 - `pnpm format` - check formatting with oxfmt.
 - `pnpm dev` - start the Vite dev server for extension development.
 - `pnpm preview` - preview the Vite build.
+- `pnpm media:capture` / `pnpm media:encode` - record the extension on real
+  TikTok and build the README and store media in `media-capture/`. Always run
+  them through these scripts: they cap memory, CPU, and runtime, and an
+  uncapped capture has frozen the machine before. See `docs/media-capture.md`.
 
 For code changes, run at least `pnpm lint`, `pnpm typecheck`, and `pnpm test`;
 run `pnpm build` when touching manifest, content script, background script,

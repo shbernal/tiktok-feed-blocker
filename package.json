@@ -36,6 +36,8 @@
     "e2e:real:open": "node scripts/open-real-tiktok.mjs",
     "e2e:real:open:extension": "tsc -b && vite build && TIKTOK_REAL_OPEN_EXTENSION=1 node scripts/open-real-tiktok.mjs",
     "manual:tiktok": "tsc -b && vite build && playwright test -c playwright.manual.config.ts --headed",
+    "media:capture": "tsc -b && vite build && bash scripts/capture-media.sh capture",
+    "media:encode": "bash scripts/capture-media.sh encode",
     "lint": "oxlint",
     "format": "oxfmt --check .",
     "preview": "vite preview"
