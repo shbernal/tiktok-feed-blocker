@@ -56,9 +56,10 @@ headlines and crops live in that script.
 Both stores publish `store/screenshots/` as is. After copying new files there:
 
 1. Update the captions and order in `amo/previews.json`, then run `pnpm test`.
-2. Sync AMO with `pnpm publish:amo --assets-only --sync-previews`. Leave an hour
-   between a sync and a release; see
-   [Preview writes are throttled hard](./amo-listing.md#preview-writes-are-throttled-hard).
+2. AMO picks up only the changed images at the next release. To apply them
+   sooner, run `pnpm publish:amo --assets-only`, with `--plan` first to see the
+   writes; see
+   [Listing images are compared by pixels](./amo-listing.md#listing-images-are-compared-by-pixels).
 3. Upload them to the Chrome Web Store in the Developer Dashboard and save the
    draft without submitting it. A submitted listing edit is a pending review,
    and the next release's upload fails against it. The release's publish call

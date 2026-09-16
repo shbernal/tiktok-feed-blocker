@@ -47,8 +47,9 @@ directory to the Chrome Web Store, submits the item for review, and attaches the
 zip to the GitHub Release.
 
 `.github/workflows/publish-amo.yml` runs on the same trigger and submits the
-Firefox package to addons.mozilla.org. Every published release runs both publish
-workflows, and neither depends on the other.
+Firefox package to addons.mozilla.org. When AMO throttles it, it continues in a
+later run of itself. Every published release runs both publish workflows, and
+neither depends on the other.
 
 ## Chrome Web Store publishing
 
@@ -84,50 +85,71 @@ check.
 
 ## AMO publishing
 
-The AMO workflow uses the `addons-mozilla-org` GitHub environment.
+The AMO workflow runs on a published release and on `workflow_dispatch`, always
+on a `v*` tag. It has three jobs:
 
-The release job:
+1. `wait` sleeps until the `not_before` input, if there is one. It sleeps at
+   most 5h45m, because GitHub cancels a job at six hours. If `not_before` is
+   still ahead after that, it hands off and `publish` is skipped.
+2. `publish` uses the `addons-mozilla-org` GitHub environment and:
+   1. Checks out the release tag.
+   2. Runs the same install, format, lint, typecheck, and test gates as CI.
+   3. Checks that the release tag matches `package.json`.
+   4. Runs `pnpm package:source`, which archives the checked-out tag.
+   5. Runs `pnpm package:firefox` and checks the result with `web-ext lint`.
+   6. Uploads both zips as GitHub Release assets. `--clobber` lets every run in
+      a chain repeat this.
+   7. Runs `scripts/publish-amo.mjs`. Exit 75 means the script deferred on a
+      throttle (see below). The job still succeeds and passes `resume_at` on.
+3. `continue` runs after a handoff or a deferral. It starts a new run on the
+   same tag with `gh workflow run publish-amo.yml --ref <tag>`, passing
+   `not_before` (when AMO clears) and `deadline`. The first run sets the
+   deadline three days out. If AMO clears after the deadline, the job fails
+   instead. That red run is the only notification a stuck release gets.
 
-1. Checks out the release tag.
-2. Runs the same install, format, lint, typecheck, and test gates as CI.
-3. Checks that the release tag matches `package.json`.
-4. Runs `pnpm package:source`, which archives the checked-out tag.
-5. Runs `pnpm package:firefox` and checks the result with `web-ext lint`.
-6. Runs `pnpm publish:amo`.
-7. Uploads both zips as GitHub Release assets.
+`workflow_dispatch` is the one event `GITHUB_TOKEN` can trigger, so the chain
+needs no stored token. It needs no schedule either. GitHub disables scheduled
+workflows in a public repository after 60 days without activity, which is the
+usual state of this project between releases.
+
+A concurrency group allows one run at a time, so a continuation queues behind
+the run that started it. GitHub keeps one pending run per group: a release
+published while a continuation is queued cancels that continuation. The newer
+run still reconciles the listing, but the older version is never submitted.
 
 `scripts/publish-amo.mjs` calls the AMO API v5 directly instead of using
 `web-ext sign`. `web-ext sign` wraps the same endpoints, but it reports
 listed-channel review state poorly and has exited non-zero on submissions that
-succeeded. The script:
+succeeded.
 
-1. Checks the credentials with an authenticated no-op call before uploading
-   anything.
-2. Uploads the package to the `listed` channel and polls until AMO reports it
-   processed and valid, printing validation errors on failure.
-3. Sends `PUT /api/v5/addons/addon/<guid>/`, which creates the add-on on a first
+The script reconciles. It reads what AMO has and writes only the difference,
+so running it again after any failure continues the work instead of repeating
+it. It:
+
+1. Checks the credentials with an authenticated read before writing anything.
+2. Looks up the version by number with `GET .../versions/v<version>/`. If AMO
+   does not have it, the script uploads the package to the `listed` channel and
+   polls until AMO reports it processed and valid. Then it sends
+   `PUT /api/v5/addons/addon/<guid>/`, which creates the add-on on a first
    submission and a new version after that. The request carries the listing
    metadata from `amo/listing.json` and the reviewer notes from
    `amo/source-submission.md`.
-4. Attaches the source archive in a second call, because AMO cannot take source
-   as JSON or nested in a form-data version object.
-5. Reapplies the listing icon from `public/icons/icon128.png` and prints how far
-   the published screenshots have drifted from `amo/previews.json`.
-
-The release job does not pass `--sync-previews`, so a release never replaces
-screenshots. The drift line makes a needed sync visible. Run one by hand with
-`pnpm publish:amo --assets-only --sync-previews`, which uploads no package and
-creates no version. [AMO listing](amo-listing.md) explains why previews are
-opt-in and the icon is not.
+3. Attaches the source archive if the version has none. That takes a second
+   call, because AMO cannot take source as JSON or nested in a form-data
+   version object.
+4. Applies the listing icon and the screenshots in `amo/previews.json` wherever
+   AMO's copy differs. Images are compared by decoded pixels;
+   [AMO listing](amo-listing.md#listing-images-are-compared-by-pixels) explains
+   how.
 
 Every request mints its own JWT. AMO caps a token's lifetime at five minutes
 from issue, and validation polling can run longer than that.
 
-The script retries a 429 only when this run can serve the wait: at most 70
-minutes for one wait and two hours for the whole run. A longer wait means a
-throttle bucket that refills slower than a GitHub job lives, so the run fails
-and prints when to re-run. See
-[Preview writes are throttled hard](amo-listing.md#preview-writes-are-throttled-hard).
+The script waits out a 429 only when this run can serve the wait: at most 70
+minutes for one wait and two hours for the whole run. A longer wait defers the
+run. The script prints what it already wrote and when the limit clears, writes
+`resume_at` to `$GITHUB_OUTPUT`, and exits 75. See
+[Writes are throttled hard](amo-listing.md#writes-are-throttled-hard).
 
 AMO queues a listed version for human review, so it does not go live on
 submission. Success is a file status of `unreviewed`, which the developer
@@ -155,15 +177,21 @@ The AMO workflow reads these secrets from the `addons-mozilla-org` environment:
 
 These are real credentials, so they are environment secrets and not repository
 variables. The environment only allows `v*` tags, so a workflow on a branch
-cannot read them.
+cannot read them. For the same reason, a continuation run dispatches on the
+tag, not on `main`.
 
 `publish-cws.yml` has these permissions:
 
 - `contents: write`, to attach the packaged zip to the GitHub Release.
 - `id-token: write`, to request an OIDC token for Google Cloud authentication.
 
-`publish-amo.yml` has only `contents: write`. AMO has no OIDC option, so there is
-no token to request.
+`publish-amo.yml` grants permissions per job:
+
+- `publish` gets `contents: write`, to attach the zips to the GitHub Release.
+- `continue` gets `actions: write`, to start the next run.
+- `wait` gets none.
+
+AMO has no OIDC option, so there is no token to request.
 
 ## Google Cloud configuration
 
@@ -208,9 +236,10 @@ repositories cannot use the Chrome Web Store service account through this trust.
    ```
 
 4. Check whether `store/description.txt` or `store/screenshots/` need updating
-   for the user-facing change. The release job reapplies the description to
-   AMO. Chrome needs a manual Developer Dashboard paste, so note it if the
-   description changed.
+   for the user-facing change. The release job applies both to AMO: the
+   description with the new version, the screenshots wherever they differ.
+   Chrome needs a manual Developer Dashboard paste and upload, so note it if
+   either changed.
 5. Commit the release candidate and the version bump.
 6. Push `main`.
 7. Check that the Chrome Web Store has no submission still in review. Releasing
@@ -219,10 +248,9 @@ repositories cannot use the Chrome Web Store service account through this trust.
 8. Publish a GitHub Release with a matching tag, for example `v1.2.0`.
 9. Watch the `Publish Chrome Web Store` and `Publish addons.mozilla.org` runs.
 10. Confirm the Chrome Web Store shows the new version as submitted or
-    published, and that AMO shows it as awaiting review.
-11. If the release job printed a previews drift line, run
-    `pnpm publish:amo --assets-only --sync-previews` to reapply the screenshots.
-    The job never does this itself.
+    published, and that AMO shows it as awaiting review. If the AMO run's
+    summary says a later run continues it, the release is done when the last
+    run in that chain succeeds, which can take a day.
 
 Both stores reject a reused extension version, so every release must bump
 `package.json` before publishing.
@@ -245,12 +273,21 @@ GitHub only allows re-running a run within 30 days of the original run. After
 that, a re-run is impossible, and the version has to ship as a new release or
 as a manual upload.
 
-Two store-side conditions are known:
+An AMO throttle no longer fails the job: the run defers and a later run
+continues it (see [AMO publishing](#amo-publishing)). A red AMO run means a
+real error, or a release still throttled at its deadline. After fixing the
+cause, start a new run on the tag rather than re-running the old one:
 
-- **AMO throttled the submission.** The failure prints when the bucket refills,
-  so re-run after that. AMO's daily add-on-submission budget is per user and a
-  release spends about four calls, so a release cut within a day of the previous
-  one can hit it.
+```sh
+gh workflow run publish-amo.yml --ref v1.2.0 --repo shbernal/tiktok-feed-blocker
+```
+
+A new run is not bound by the 30-day re-run window. Because the script
+reconciles, it picks up wherever the failed run stopped. Like a re-run, it uses
+the workflow and scripts at the tag.
+
+The known Chrome-side condition:
+
 - **Chrome has a submission in review.** The Chrome Web Store API v2 answers an
   upload against an item with a pending submission with HTTP 400 ("Item is in
   review"). This is what stopped 1.4.1: on 2026-08-04, v1.4.0 was submitted at
@@ -273,8 +310,8 @@ Two store-side conditions are known:
   curl -sI "https://clients2.google.com/service/update2/crx?response=redirect&prodversion=200&acceptformat=crx3&x=id%3D<extension-id>%26uc" | grep -i location
   ```
 
-Neither case uses up the version number. Neither store created anything, so the
-same tag can be re-run until it lands, within the 30-day window.
+A rejected Chrome upload does not use up the version number, so the same tag
+can be re-run until it lands, within the 30-day window.
 
 ## Useful checks
 
@@ -313,12 +350,19 @@ gh secret list --env addons-mozilla-org --repo shbernal/tiktok-feed-blocker
 `pnpm publish:amo --help` lists every flag and the environment variables it
 reads.
 
-Check the AMO credentials, or preview what a submission would send, without
-uploading anything:
+List the AMO runs, including continuations:
+
+```sh
+gh run list --workflow publish-amo.yml --repo shbernal/tiktok-feed-blocker
+```
+
+Check the AMO credentials, preview what a submission would send, or list the
+writes a release would make, without writing anything:
 
 ```sh
 pnpm publish:amo --check
 pnpm publish:amo --dry-run
+pnpm publish:amo --plan
 ```
 
 Run a candidate package through AMO's real validator before cutting a release

@@ -79,53 +79,50 @@ add-on record first exists.
 
 `scripts/publish-amo.mjs` applies them:
 
-| Asset    | Endpoint                               | When                        |
-| -------- | -------------------------------------- | --------------------------- |
-| Icon     | `PATCH /addons/addon/{guid}/` (`icon`) | every release               |
-| Previews | `POST`/`DELETE .../previews/{id}/`     | only with `--sync-previews` |
+| Asset    | Endpoint                                   | When                                         |
+| -------- | ------------------------------------------ | -------------------------------------------- |
+| Icon     | `PATCH /addons/addon/{guid}/` (`icon`)     | AMO serves different pixels                  |
+| Previews | `POST`/`PATCH`/`DELETE .../previews/{id}/` | pixels, position, or caption differ from AMO |
 
 Captions take a second call. The throttle section below explains why there is no
 way around it.
 
 The script checks these constraints locally, so a bad file fails before any
-upload: PNG or JPEG only, not animated, under 4MB. The icon must also be square,
-which AMO enforces server-side. Previews have no minimum size. The 1000×750 in
-AMO's documentation is a resize target, not a rejection threshold, and AMO
-accepts the 1280×800 screenshots as they are.
+upload: PNG only, decodable, not animated, under 4MB. AMO also takes JPEG, but
+the script does not; see
+[Listing images are compared by pixels](#listing-images-are-compared-by-pixels).
+The icon must also be square, which AMO enforces server-side. Previews have no
+minimum size. The 1000×750 in AMO's documentation is a resize target, not a
+rejection threshold, and AMO accepts the 1280×800 screenshots as they are.
 
-### Preview writes are throttled hard
+### Writes are throttled hard
 
-Every call on the previews endpoint uses an unsafe method, so all of them count
-against AMO's add-on submission throttles: 3 per minute, 10 per hour, and 24 per
-day per user. Reads are free. Syncing five screenshots costs five uploads, five
-caption patches, and one delete per image already published. Replacing a
-published set of five is 15 calls, half again an hour's budget, so a sync always
-hits the limit partway through.
+Every write to the add-on counts against AMO's add-on submission throttles,
+documented as 3 per minute, 10 per hour, and 24 per day per user.
+`AddonViewSet` and the previews endpoint use the same classes, so the listing
+`PUT`, the icon `PATCH`, and every preview call share one budget. Reads are
+free, and so are the listing images, which AMO serves from its media host.
 
-The script waits out the `Retry-After` header and retries, so a sync works but
-spends most of its time idle. It prints the call count up front so a slow run
-doesn't look hung. It retries only on 429, because any other failure means the
-request itself is wrong. Waits can be long: the first real sync got a
-`Retry-After` of 3454 seconds when it crossed the hourly boundary, and finished
-correctly after sitting out the full window.
+A release that changes no listing asset makes three writes: the upload, the
+version `PUT`, and the source `PATCH`. Each new screenshot adds two, and each
+reorder, caption edit, or removal adds one.
 
-Some waits are not worth serving. The header varies by four orders of magnitude
-depending on which bucket was hit, and the daily bucket answers with whatever is
-left of its 24 hours. Release 1.4.1 got 52277 seconds from it and slept inside a
-GitHub job that gets cancelled at six hours. That burned a whole runner, created
-no version, and left the reason in a log line six hours above the failure.
-`planThrottleRetry` in `scripts/amo-previews.mjs` now caps a single wait at 70
-minutes, just past the hourly boundary, which is the longest wait that can still
-succeed. It also caps total throttled time per run at two hours, since shorter
-waits still add up past what the job can serve. Past either cap, the run fails
-at once and prints when the bucket refills. Re-run it after that.
+The documented numbers understate what AMO does. On 2026-09-14, about 13
+writes between 13:59 and 16:46 UTC locked every add-on write until 21:07. Three
+release writes at 21:30 then drew an 8-hour lock on the third. Release 1.4.1
+was once told to wait 52277 seconds. `Retry-After` has been accurate each time:
+once it passed, writes went through.
 
-The throttle covers more than previews. `AddonViewSet` uses the same classes, so
-the listing `PUT` and the icon `PATCH` share one budget, and a release already
-spends about four of the ten hourly calls. **Do not run a preview sync in the
-same hour as a release.** Eight calls plus four exceeds the cap, and the sync is
-what stalls. This is the other reason `--assets-only` is its own command and not
-a flag on the release path.
+The script only retries a 429 in-process when the wait is short enough.
+`planThrottleRetry` in `scripts/amo-previews.mjs` caps one wait at 70 minutes.
+That clears the hourly boundary, which has answered with 3454 seconds and then
+completed. Total throttled time per run is capped at two hours. Past either
+cap, the run defers, and the release workflow continues it in a later run once
+`Retry-After` has passed; see
+[AMO publishing](ci-release-flow.md#amo-publishing). The cap exists because
+release 1.4.1 slept on its 52277 seconds inside a job GitHub cancels at six
+hours. That run created nothing, and its only explanation was a log line six
+hours above the failure.
 
 There is no way to raise the ceiling. `GranularUserRateThrottle` honors one
 bypass, the `API_BYPASS_THROTTLING` permission, which comes from a group
@@ -139,30 +136,44 @@ Each image needs two calls. `caption` is writable when a preview is created, but
 the `l10n_flat_input_output` gate), and multipart cannot carry a dictionary. So
 the localized caption has to follow as JSON.
 
-### Why previews are opt-in
+### Listing images are compared by pixels
 
-A sync replaces everything: it uploads every entry in `amo/previews.json` and
-deletes what was published before. It cannot do less. AMO re-encodes images on
-upload, so a local file never shares a hash with its published copy, and nothing
-on a preview records which manifest entry produced it. Reusing a published
-preview would mean assuming its bytes still match the file on disk, and a
-swapped screenshot that never uploads is exactly the failure to avoid.
+AMO re-encodes every listing image on upload. A published copy never has the
+same bytes as the local file, and nothing on a preview records which file it
+came from. The pixels do survive: a PNG that AMO does not resize decodes to the
+same RGBA as the original. This was checked against the five 1280×800
+screenshots and the 128×128 icon. `pixelKey` in `scripts/amo-previews.mjs`
+hashes the decoded pixels with `pngjs`, which normalizes color type and bit
+depth. `planPreviewReconcile` then matches on those keys:
 
-Replacing previews on every release would churn the public listing for
-description-only changes, so `--sync-previews` is off by default. So that
-skipped syncs stay visible, every release without the flag prints how many
-previews the manifest has and how many AMO has. Equal counts are reported as
-equal counts, not as a match, because the script cannot compare the images.
+- Each manifest entry claims a published preview with the same pixels,
+  preferring one already at its position. The claimed preview gets a `PATCH`
+  only if its position or caption differs.
+- An entry with no match is uploaded, then captioned.
+- A published preview that no entry claimed is deleted.
+
+Uploads run first, so a run that stops partway leaves too many images rather
+than none. The next run finishes the work: an upload whose caption never
+landed gets only the caption.
+
+This is why listing images must be PNG. AMO re-encodes a JPEG lossily, so it
+could never match and would upload again on every run. Two manifest entries
+with the same pixels are rejected too. After each upload, the script polls
+until AMO serves the expected pixels, since AMO resizes in a background task.
+If AMO still serves different pixels after two minutes, it has altered the
+image, and the run fails rather than re-uploading it on every release.
 
 The order of `amo/previews.json` is the display order. `position` comes from the
 array index, so reordering the file reorders the listing.
 
 ### Repairing a live listing
 
-`pnpm publish:amo --assets-only` applies the icon, and with `--sync-previews` the
-previews, to the existing add-on. It uploads no package and creates no version,
-so it works between releases. AMO accepts both while a version is in review,
-because they are add-on metadata, not version metadata.
+`pnpm publish:amo --assets-only` reconciles the icon and the previews on the
+existing add-on. It uploads no package and creates no version, so it works
+between releases. AMO accepts both while a version is in review, because they
+are add-on metadata, not version metadata. Add `--plan` to list the writes
+first. A long throttle defers this command the same way it defers a release;
+run it again after the printed time.
 
 ## Source submission is mandatory
 
@@ -186,3 +197,5 @@ the reviewer instructions, and the reproducibility check.
    AMO only rejects bad metadata on the call that creates the version, which
    runs after the triggering release is already published, so the dry run is
    the last cheap place to catch it.
+6. Run `pnpm publish:amo --plan` to see which icon and screenshot writes the
+   release will add to its own three.

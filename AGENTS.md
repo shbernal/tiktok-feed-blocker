@@ -128,9 +128,10 @@ leaves the Chrome build healthy.
   has no such automation, so the same edit reaches Chrome only when someone
   pastes it into the Developer Dashboard.
 - Replacing anything in `store/screenshots/` also needs `amo/previews.json`
-  checked, since it captions and orders those files by path. Screenshots reach
-  AMO only through an explicit `pnpm publish:amo --assets-only --sync-previews`;
-  a release prints the drift but never syncs them. Chrome needs the same manual
+  checked, since it captions and orders those files by path. Like the
+  description, screenshots are a live AMO change: every release uploads the
+  ones whose pixels differ, and `pnpm publish:amo --assets-only` applies them
+  between releases. Listing images must be PNG. Chrome needs the same manual
   dashboard upload as the description.
 - Do not change `browser_specific_settings.gecko.id`. AMO binds the listing and
   every installed user's update path to it, so a new id is a new add-on.
