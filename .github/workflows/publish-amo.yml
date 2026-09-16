@@ -1,22 +1,82 @@
 name: Publish addons.mozilla.org
 
+# A release starts this workflow. AMO's write throttle can lock an account for
+# longer than a job lives, so a run that AMO throttles past what it may wait
+# does not fail: it starts a later run of this workflow on the same tag, which
+# sleeps until the limit clears and continues from what AMO then reports. See
+# docs/ci-release-flow.md.
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      not_before:
+        description: ISO time to sleep until before publishing
+        required: false
+        default: ''
+      deadline:
+        description: ISO time past which the release stops continuing
+        required: false
+        default: ''
 
 permissions:
-  contents: write
+  contents: read
+
+# One release chain at a time, so two runs never spend AMO's budget together.
+# A continuation queues behind the run that started it.
+concurrency:
+  group: publish-amo
+  cancel-in-progress: false
 
 jobs:
+  # Its own job, so the sleep does not eat into the six hours the publish job
+  # gets. Past what one job can sleep, it hands off to a later run instead.
+  wait:
+    # The AMO environment only admits `v*` tags, and the tag is the release.
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      handoff: ${{ steps.sleep.outputs.handoff }}
+
+    steps:
+      - name: Wait for AMO's throttle to clear
+        id: sleep
+        env:
+          NOT_BEFORE: ${{ inputs.not_before }}
+        run: |
+          if [ -z "$NOT_BEFORE" ]; then
+            exit 0
+          fi
+
+          max=$((5 * 3600 + 45 * 60))
+          left=$(( $(date -d "$NOT_BEFORE" +%s) - $(date +%s) ))
+
+          if [ "$left" -gt "$max" ]; then
+            echo "AMO clears at $NOT_BEFORE, past what this job can sleep; handing off."
+            sleep "$max"
+            echo "handoff=true" >> "$GITHUB_OUTPUT"
+          elif [ "$left" -gt 0 ]; then
+            echo "Sleeping until $NOT_BEFORE."
+            sleep "$left"
+          fi
+
   publish:
+    needs: wait
+    if: needs.wait.outputs.handoff != 'true'
     runs-on: ubuntu-latest
     environment: addons-mozilla-org
+    permissions:
+      contents: write
+    outputs:
+      deferred: ${{ steps.submit.outputs.deferred }}
+      resume_at: ${{ steps.submit.outputs.resume_at }}
 
     steps:
       - name: Checkout release tag
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.ref_name }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -74,19 +134,67 @@ jobs:
             echo "SOURCE_ZIP=release/tiktok-feed-blocker-source-${version}.zip"
           } >> "$GITHUB_ENV"
 
-      # Uploads the package, waits for AMO validation, creates the version with
-      # the reviewer notes, and attaches the source archive AMO requires for
-      # bundler-built add-ons. A listed version is queued for human review, so
-      # the step succeeds on "awaiting review" and never waits for "public".
-      - name: Submit to addons.mozilla.org
-        env:
-          MOZILLA_ADDON_JWT_ISSUER: ${{ secrets.MOZILLA_ADDON_JWT_ISSUER }}
-          MOZILLA_ADDON_JWT_SECRET: ${{ secrets.MOZILLA_ADDON_JWT_SECRET }}
-        run: pnpm publish:amo
-
+      # Before the submission, so the release carries its packages even while
+      # AMO is still deferring. The tag builds the same zips on every run.
       - name: Attach packages to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "$GITHUB_REF_NAME" \
             "$PACKAGE_ZIP" "$SOURCE_ZIP" --clobber
+
+      # Creates the version unless AMO has it, attaches the source unless the
+      # version has it, and reconciles the icon and previews. Exit 75 means AMO
+      # throttled past what this run may wait; the script has already written
+      # resume_at, and the continue job takes it from there.
+      - name: Submit to addons.mozilla.org
+        id: submit
+        env:
+          MOZILLA_ADDON_JWT_ISSUER: ${{ secrets.MOZILLA_ADDON_JWT_ISSUER }}
+          MOZILLA_ADDON_JWT_SECRET: ${{ secrets.MOZILLA_ADDON_JWT_SECRET }}
+        run: |
+          status=0
+          node scripts/publish-amo.mjs || status=$?
+
+          if [ "$status" -eq 75 ]; then
+            echo "deferred=true" >> "$GITHUB_OUTPUT"
+            echo "AMO throttled this run; a later run continues it." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          exit "$status"
+
+  # Starts the later run. `workflow_dispatch` is the one event GITHUB_TOKEN may
+  # trigger, and it needs no schedule, which GitHub disables in a quiet public
+  # repository. The deadline bounds the chain: a release still throttled three
+  # days in fails here, and that failure is the notification.
+  continue:
+    needs: [wait, publish]
+    if: >-
+      always() && needs.wait.result == 'success' &&
+      (needs.wait.outputs.handoff == 'true' ||
+      needs.publish.outputs.deferred == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+
+    steps:
+      - name: Start a later run on the same tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          RESUME_AT: ${{ needs.publish.outputs.resume_at || inputs.not_before }}
+          DEADLINE: ${{ inputs.deadline }}
+        run: |
+          deadline="${DEADLINE:-$(date -u -d '+3 days' +%Y-%m-%dT%H:%M:%SZ)}"
+
+          if [ "$(date -d "$RESUME_AT" +%s)" -gt "$(date -d "$deadline" +%s)" ]; then
+            echo "::error::AMO accepts writes again at $RESUME_AT, after the $deadline deadline for $TAG. Continue it with: gh workflow run publish-amo.yml --ref $TAG"
+            exit 1
+          fi
+
+          gh workflow run publish-amo.yml --ref "$TAG" \
+            -f not_before="$RESUME_AT" -f deadline="$deadline"
+
+          echo "Continues $TAG after $RESUME_AT (deadline $deadline)." >> "$GITHUB_STEP_SUMMARY"
