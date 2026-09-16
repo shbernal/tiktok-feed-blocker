@@ -1,28 +1,28 @@
-// Decision logic for the AMO listing-asset sync, kept out of `publish-amo.mjs`
-// so it can be unit-tested without an HTTP layer or a credential. Everything
-// here is pure: it takes the manifest and whatever AMO reports, and returns the
-// work to do.
+// Decision logic for the AMO listing-asset reconcile, kept out of
+// `publish-amo.mjs` so it can be unit-tested without an HTTP layer or a
+// credential. Everything here is pure: it takes the manifest and whatever AMO
+// reports, and returns the work to do.
+import crypto from 'node:crypto'
 import path from 'node:path'
+import pngjs from 'pngjs'
 
 // `ImageField` in addons-server rejects anything that is not a non-animated
 // PNG or JPEG under `MAX_IMAGE_UPLOAD_SIZE`, which is 4MB. Checking locally
 // turns a mid-release API rejection into a failure before anything is uploaded.
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024
 
-const CONTENT_TYPES = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-}
-
+// AMO would take a JPEG too, but it re-encodes every image on ingest, and only
+// a PNG comes back with the same pixels. A JPEG could never be recognized as
+// already published, so every run would upload it again.
 export const imageContentType = file => {
-  const type = CONTENT_TYPES[path.extname(file).toLowerCase()]
-
-  if (type === undefined) {
-    throw new Error(`${file} is not a PNG or JPEG; AMO accepts only those`)
+  if (path.extname(file).toLowerCase() !== '.png') {
+    throw new Error(
+      `${file} is not a PNG; only a PNG keeps its pixels through AMO's ` +
+        're-encode, which is how the listing is compared',
+    )
   }
 
-  return type
+  return 'image/png'
 }
 
 export const checkImageBytes = (file, bytes) => {
@@ -30,6 +30,26 @@ export const checkImageBytes = (file, bytes) => {
     const megabytes = (bytes / 1024 / 1024).toFixed(1)
     throw new Error(`${file} is ${megabytes}MB; AMO rejects images over 4MB`)
   }
+}
+
+// Identity for a listing image. AMO re-encodes on ingest, so a local file and
+// its published copy never share a byte hash, but a PNG it has not resized
+// decodes to the same RGBA. pngjs normalizes every color type and bit depth to
+// 8-bit RGBA, so the key survives a change of encoding and nothing else.
+export const pixelKey = buffer => {
+  let image
+
+  try {
+    image = pngjs.PNG.sync.read(buffer)
+  } catch (error) {
+    throw new Error(`not a readable PNG: ${error.message}`)
+  }
+
+  return crypto
+    .createHash('sha256')
+    .update(`${image.width}x${image.height}\n`)
+    .update(image.data)
+    .digest('hex')
 }
 
 // Display order is the order of the file. `position` is derived from the index
@@ -75,6 +95,22 @@ export const parsePreviewManifest = (raw, source = 'amo/previews.json') => {
   })
 }
 
+// Two files with the same pixels would both match one published preview, and
+// the listing could never settle on showing it twice.
+export const checkDistinctPixels = entries => {
+  const byKey = new Map()
+
+  for (const entry of entries) {
+    const other = byKey.get(entry.key)
+
+    if (other !== undefined) {
+      throw new Error(`${entry.file} has the same pixels as ${other}`)
+    }
+
+    byKey.set(entry.key, entry.file)
+  }
+}
+
 // Creating a preview goes through AMO's add-on submission throttles, and three
 // screenshots is already enough to trip them: the first upload succeeds and the
 // next comes back 429 with a Retry-After of about a minute. DRF sets that header
@@ -114,14 +150,12 @@ export const describeWait = ms => {
 }
 
 // Which bucket a 429 came from changes `Retry-After` by four orders of
-// magnitude, and only some of them are worth waiting out. The per-minute limit
-// answers in about a minute; crossing the hourly boundary has answered with
-// 3454 seconds and then completed correctly. The daily limit answers with
-// whatever is left of its 24 hours, and that is not a wait, it is a different
-// day. Release 1.4.1 slept on a `Retry-After` of 52277 seconds inside a job
-// GitHub cancels at six: it spent a whole runner, created no version, and the
-// only account of why was a log line six hours above the failure. Past the cap
-// the run fails at once and says when the bucket refills.
+// magnitude, and only some of them are worth waiting out in-process. The
+// per-minute limit answers in about a minute; crossing the hourly boundary has
+// answered with 3454 seconds and then completed correctly. Longer locks (4h,
+// 8h, and 14.5h have all been seen) outlast what one run should sit through, so
+// past the cap the run defers: it stops and says when the bucket refills, and
+// the release workflow starts a later run that picks up where this one stopped.
 //
 // The ceiling has to clear the hourly boundary, which is the longest wait that
 // is still a real wait, with margin for one that lands somewhat worse.
@@ -159,33 +193,69 @@ export const planThrottleRetry = (
   return { retry: true, wait }
 }
 
-// Identity is the part of this the reconcile cannot solve. AMO re-encodes every
-// image on ingest, so a local file and its published copy never share a hash,
-// and nothing on a preview says which manifest entry produced it. Reusing a
-// remote preview would therefore mean assuming its bytes are still the ones on
-// disk — and a swapped screenshot that silently never uploads is exactly the
-// failure this is meant to prevent. So a sync replaces rather than reconciles:
-// it uploads the whole manifest and drops whatever was there before.
+// Every locale the manifest sets has to read back the same. Locales AMO holds
+// that the manifest does not mention are left alone, as the PATCH would leave
+// them.
+const sameCaption = (remote, wanted) =>
+  Object.entries(wanted).every(([locale, text]) => remote?.[locale] === text)
+
+// Both sides carry a pixel `key`. Each manifest entry claims one published
+// preview with its key, preferring one already at the right position, so a
+// duplicate left by an interrupted run is the one deleted rather than the one
+// in place. Whatever nobody claims is gone from the manifest.
 //
-// Uploads are ordered before deletes so a run that dies halfway leaves the
-// listing with too many images rather than none.
-export const planPreviewSync = (remote, manifest) => ({
-  uploads: manifest.map((entry, index) => ({ ...entry, position: index })),
-  deletes: remote.map(preview => preview.id),
-})
+// A run that dies partway converges on the next one: an uploaded preview whose
+// caption never landed matches by key and only gets the caption, and one that
+// never uploaded is still missing. Uploads come before deletes so a run that
+// dies halfway leaves the listing with too many images rather than none.
+export const planPreviewReconcile = (remote, manifest) => {
+  const unclaimed = [...remote]
 
-// Printed on every release that does not pass `--sync-previews`, so a
-// screenshot change nobody synced stays visible instead of going quiet. Equal
-// counts are not proof the images match: there is nothing to compare bytes
-// against, so a same-count swap looks identical from here.
-export const describePreviewDrift = (remote, manifest) => {
-  const state =
-    remote.length === manifest.length
-      ? 'same count, though the images themselves cannot be compared'
-      : 'out of sync'
+  const claim = (key, position) => {
+    const inPlace = unclaimed.findIndex(
+      preview => preview.key === key && preview.position === position,
+    )
+    const index =
+      inPlace === -1
+        ? unclaimed.findIndex(preview => preview.key === key)
+        : inPlace
 
-  return (
-    `previews: ${manifest.length} in the manifest, ${remote.length} on AMO ` +
-    `— ${state}. Pass --sync-previews to reapply them.`
-  )
+    return index === -1 ? undefined : unclaimed.splice(index, 1)[0]
+  }
+
+  const uploads = []
+  const updates = []
+
+  manifest.forEach((entry, position) => {
+    const match = claim(entry.key, position)
+
+    if (match === undefined) {
+      uploads.push({ ...entry, position })
+      return
+    }
+
+    const change = {}
+
+    if (match.position !== position) {
+      change.position = position
+    }
+
+    if (!sameCaption(match.caption, entry.caption)) {
+      change.caption = entry.caption
+    }
+
+    if (Object.keys(change).length > 0) {
+      updates.push({ id: match.id, ...change })
+    }
+  })
+
+  return {
+    uploads,
+    updates,
+    deletes: unclaimed.map(preview => preview.id),
+  }
 }
+
+// Each upload is a POST and a caption PATCH; each update and delete is one call.
+export const countPreviewWrites = ({ uploads, updates, deletes }) =>
+  uploads.length * 2 + updates.length + deletes.length

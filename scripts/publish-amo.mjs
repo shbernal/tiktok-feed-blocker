@@ -3,6 +3,9 @@
 // listed-channel review state and is known to exit non-zero on submissions that
 // actually succeeded, which is not something a release job can be built on.
 //
+// Every run reconciles: it reads what AMO already has and makes only the writes
+// still missing, so a run that AMO throttled partway is finished by running it
+// again rather than by starting over.
 //
 // Run `pnpm publish:amo --help` for the flags and the environment it reads.
 import fs from 'node:fs'
@@ -11,12 +14,14 @@ import process from 'node:process'
 import crypto from 'node:crypto'
 import { printHelpAndExit } from './help.mjs'
 import {
+  checkDistinctPixels,
   checkImageBytes,
-  describePreviewDrift,
+  countPreviewWrites,
   describeWait,
   imageContentType,
   parsePreviewManifest,
-  planPreviewSync,
+  pixelKey,
+  planPreviewReconcile,
   planThrottleRetry,
 } from './amo-previews.mjs'
 
@@ -29,6 +34,7 @@ const LICENSE = 'MIT'
 // they are edited on the add-on record and survive every release untouched
 // unless something here rewrites them.
 const ICON = 'public/icons/icon128.png'
+const ICON_SIZE = '128'
 const PREVIEW_MANIFEST = 'amo/previews.json'
 
 // Firefox only. The manifest declares no Android support, and
@@ -40,12 +46,21 @@ const COMPATIBILITY = ['firefox']
 const POLL_INTERVAL_MS = 10_000
 const POLL_ATTEMPTS = 60
 
+// AMO resizes listing images in a background task, so a fresh upload can take a
+// moment to be served.
+const PIXEL_POLL_INTERVAL_MS = 10_000
+const PIXEL_POLL_ATTEMPTS = 12
+
+// EX_TEMPFAIL. The release workflow reads this as "throttled, resume later"
+// and every other non-zero code as a real failure.
+const EXIT_DEFERRED = 75
+
 const root = process.cwd()
 const dryRun = process.argv.includes('--dry-run')
 const checkOnly = process.argv.includes('--check')
+const planOnly = process.argv.includes('--plan')
 const validateOnly = process.argv.includes('--validate-only')
 const assetsOnly = process.argv.includes('--assets-only')
-const syncPreviews = process.argv.includes('--sync-previews')
 
 const read = file => fs.readFileSync(path.resolve(root, file), 'utf8')
 const readJson = file => JSON.parse(read(file))
@@ -53,29 +68,39 @@ const readJson = file => JSON.parse(read(file))
 const { version } = readJson('package.json')
 
 printHelpAndExit(`
-Usage: pnpm publish:amo [--dry-run | --check | --validate-only | --assets-only]
-                       [--sync-previews] [--help]
+Usage: pnpm publish:amo [--dry-run | --check | --validate-only]
+                       [--assets-only] [--plan] [--help]
 
-Submits the built Firefox package to addons.mozilla.org against API v5: uploads
-the package, waits for server-side validation, creates the version, attaches the
-source archive, then reapplies the listing icon. A listed submission is queued
-for human review, so a successful run ends with the add-on nominated, not
-public.
+Brings addons.mozilla.org in line with this checkout against API v5. It reads
+what AMO already has and writes only what is missing, in this order:
+
+  1. the version: upload the package, wait for validation, and create it with
+     the listing metadata, unless AMO already has version ${version}
+  2. the source archive, unless that version already has one
+  3. the listing icon, unless AMO serves the same pixels
+  4. the previews in ${PREVIEW_MANIFEST}: upload what is missing, fix position
+     and caption, delete what the manifest no longer lists
+
+Images are compared by decoded pixels, so all of them must be PNG. A listed
+submission is queued for human review, so a successful run ends with the
+version awaiting review, not public.
+
+When AMO throttles for longer than this run may wait, the run stops, prints
+when the limit clears, writes resume_at to $GITHUB_OUTPUT when that is set,
+and exits ${EXIT_DEFERRED}. Running it again after that time continues the work.
 
 Flags
   --dry-run        resolve the listing, approval notes, previews, and file
                    paths and print them, then check the tags and categories
-                   against AMO's vocabularies; nothing is uploaded
+                   against AMO's vocabularies; makes no authenticated call
   --check          verify the API credentials and exit
+  --plan           read AMO and print the writes a real run would make;
+                   writes nothing
   --validate-only  upload through AMO's real validator without creating a
                    version; nothing is submitted and the add-on id is not
                    claimed
-  --assets-only    apply the listing icon and, with --sync-previews, the
-                   previews to the existing add-on; submits no version
-  --sync-previews  replace the published previews with ${PREVIEW_MANIFEST}.
-                   Off by default: screenshots change about once a year and a
-                   sync deletes and re-uploads all of them, so every run
-                   without it prints how far the listing has drifted instead
+  --assets-only    reconcile only the icon and the previews; needs no package
+                   and submits no version
   --help, -h       show this text
 
 Environment
@@ -85,10 +110,11 @@ Environment
                             (default: release/tiktok-feed-blocker-firefox-${version}.zip)
   AMO_SOURCE                source archive to attach
                             (default: release/tiktok-feed-blocker-source-${version}.zip)
+  GITHUB_OUTPUT             file that receives resume_at on a deferral
 
 Both defaults are produced by pnpm package:firefox and pnpm package:source.
 
-See docs/ci-release-flow.md and docs/firefox-amo.md.
+See docs/ci-release-flow.md and docs/amo-listing.md.
 `)
 
 const packagePath = path.resolve(
@@ -145,8 +171,30 @@ const listing = () => ({
   description: { 'en-US': read('store/description.txt').trim() },
 })
 
-const previewManifest = () =>
-  parsePreviewManifest(readJson(PREVIEW_MANIFEST), PREVIEW_MANIFEST)
+const imagePart = file => {
+  const absolute = path.resolve(root, file)
+  checkImageBytes(file, fs.statSync(absolute).size)
+
+  return filePart(absolute, imageContentType(file))
+}
+
+const localPixelKey = file =>
+  pixelKey(fs.readFileSync(path.resolve(root, file)))
+
+// Size, format, decodability, and distinctness all fail here, before any
+// write, rather than partway through a reconcile.
+const previewManifest = () => {
+  const entries = parsePreviewManifest(
+    readJson(PREVIEW_MANIFEST),
+    PREVIEW_MANIFEST,
+  ).map(entry => {
+    imagePart(entry.file)
+    return { ...entry, key: localPixelKey(entry.file) }
+  })
+
+  checkDistinctPixels(entries)
+  return entries
+}
 
 const base64url = value => Buffer.from(value).toString('base64url')
 
@@ -179,19 +227,36 @@ const parse = text => {
   }
 }
 
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+// What this run has written, for the deferral message: a throttled run is only
+// useful to read if it says how far it got.
+const completed = []
+let writes = 0
+
+const record = step => {
+  completed.push(step)
+  console.log(step)
+}
+
+class Deferred extends Error {
+  constructor(message, resumeAt) {
+    super(message)
+    this.resumeAt = resumeAt
+  }
+}
+
 // A 429 is the one status worth retrying: it says the same request will work
-// shortly, where every other failure says the request is wrong. Uploading
-// previews trips AMO's submission throttle after the first image, so without
-// this a sync of three screenshots can never finish in one run. The token is
+// later, where every other failure says the request is wrong. The token is
 // minted inside the loop because a throttle wait is long enough to matter
 // against its five-minute life.
 //
-// "Shortly" is the load-bearing word, and `planThrottleRetry` is what holds it:
-// a 429 that will not clear inside this run is a failure to report, not a wait
-// to sit out. See `MAX_THROTTLE_WAIT_MS`.
+// `planThrottleRetry` decides whether "later" fits inside this run. When it
+// does not, the run defers instead of failing: nothing already written is lost,
+// and the next run starts from what AMO then reports.
 const THROTTLE_ATTEMPTS = 5
 
-const request = async (method, endpoint, { json, form } = {}) => {
+const request = async (method, endpoint, { json, form, missingOk } = {}) => {
   let waited = 0
 
   for (let attempt = 1; ; attempt += 1) {
@@ -226,19 +291,24 @@ const request = async (method, endpoint, { json, form } = {}) => {
         continue
       }
 
-      const clearsAt = new Date(Date.now() + wait).toISOString()
-
-      throw new Error(
-        `${method} ${endpoint} → 429 throttled by AMO; ${reason}.\n` +
-          `The limit clears around ${clearsAt}. Nothing was submitted; ` +
-          're-run this job after that.',
+      throw new Deferred(
+        `${method} ${endpoint} → 429 throttled by AMO; ${reason}.`,
+        new Date(Date.now() + wait),
       )
+    }
+
+    if (response.status === 404 && missingOk) {
+      return null
     }
 
     if (!response.ok) {
       const detail =
         typeof body === 'string' ? body : JSON.stringify(body, null, 2)
       throw new Error(`${method} ${endpoint} → ${response.status}\n${detail}`)
+    }
+
+    if (method !== 'GET') {
+      writes += 1
     }
 
     return body
@@ -302,17 +372,17 @@ const filePart = (file, type) =>
 
 const zipPart = file => filePart(file, 'application/zip')
 
-// AMO also requires the icon to be square, which it enforces server-side. That
-// is left to it: reading dimensions here would mean parsing PNG and JPEG
-// headers to re-derive an answer the API already gives clearly.
-const imagePart = file => {
-  const absolute = path.resolve(root, file)
-  checkImageBytes(file, fs.statSync(absolute).size)
+// Listing images live on AMO's media host, which is public and outside the API
+// throttle, so comparing them costs no write budget.
+const remotePixelKey = async url => {
+  const response = await fetch(url)
 
-  return filePart(absolute, imageContentType(file))
+  if (!response.ok) {
+    throw new Error(`GET ${url} → ${response.status}`)
+  }
+
+  return pixelKey(Buffer.from(await response.arrayBuffer()))
 }
-
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 const messagesOf = validation =>
   (validation?.messages ?? [])
@@ -326,6 +396,16 @@ const verifyCredentials = async () => {
   const profile = await request('GET', '/accounts/profile/')
   console.log(`authenticated as ${profile.display_name ?? profile.username}`)
 }
+
+const addonEndpoint = `/addons/addon/${GUID}/`
+const previewsEndpoint = `${addonEndpoint}previews/`
+
+// A first-ever submission has no add-on yet, which is also a 404.
+const getAddon = () => request('GET', addonEndpoint, { missingOk: true })
+
+// AMO resolves a `v`-prefixed id as a version number.
+const getVersion = () =>
+  request('GET', `${addonEndpoint}versions/v${version}/`, { missingOk: true })
 
 const uploadPackage = async () => {
   const form = new FormData()
@@ -362,10 +442,10 @@ const awaitValidation = async uuid => {
 
 // PUT on the guid creates the add-on when AMO has never seen it and creates a
 // new version when it has, so first submission and every later release take the
-// same path. It also re-applies the listing metadata each release, which keeps
-// the public page in step with `amo/listing.json`.
+// same path. It also applies the listing metadata, which keeps the public page
+// in step with `amo/listing.json` at every release.
 const submitVersion = async uuid => {
-  const addon = await request('PUT', `/addons/addon/${GUID}/`, {
+  const addon = await request('PUT', addonEndpoint, {
     json: {
       ...listing(),
       version: {
@@ -377,8 +457,8 @@ const submitVersion = async uuid => {
     },
   })
 
-  console.log(`created version ${addon.version.version} (${addon.version.id})`)
-  return addon
+  record(`created version ${addon.version.version} (${addon.version.id})`)
+  return addon.version
 }
 
 // Source cannot travel as JSON, and it cannot be nested inside the version
@@ -387,87 +467,226 @@ const attachSource = async versionId => {
   const form = new FormData()
   form.set('source', zipPart(sourcePath))
 
-  const version = await request(
+  const updated = await request(
     'PATCH',
-    `/addons/addon/${GUID}/versions/${versionId}/`,
+    `${addonEndpoint}versions/${versionId}/`,
     { form },
   )
 
-  console.log(`attached ${path.basename(sourcePath)}`)
-  return version
+  record(`attached ${path.basename(sourcePath)} to version ${versionId}`)
+  return updated
+}
+
+// Waits until AMO serves `key` at whatever URL `currentUrl` reports, re-reading
+// the URL each time because it changes once the resize task has run. A
+// mismatch that outlasts the poll means AMO altered the image, which a re-run
+// cannot fix, so it is a hard failure rather than a deferral.
+const awaitPixels = async (currentUrl, key, label) => {
+  for (let attempt = 1; attempt <= PIXEL_POLL_ATTEMPTS; attempt += 1) {
+    const url = await currentUrl()
+
+    if (url && (await remotePixelKey(url).catch(() => null)) === key) {
+      return
+    }
+
+    await sleep(PIXEL_POLL_INTERVAL_MS)
+  }
+
+  throw new Error(
+    `AMO is not serving the pixels of ${label}. If it resized or altered the ` +
+      'image, every run would upload it again; supply an image AMO keeps as is.',
+  )
+}
+
+const iconUrl = addon => addon?.icons?.[ICON_SIZE]
+
+const iconMatches = async addon => {
+  const url = iconUrl(addon)
+  return (
+    url !== undefined && (await remotePixelKey(url)) === localPixelKey(ICON)
+  )
 }
 
 // The listing icon is separate metadata from the icons in the package. The
 // manifest `icons` key drives about:addons, not the AMO page, and the JSON PUT
 // that carries the rest of the listing cannot carry a file at all — AMO
-// documents `icon` as multipart-only and unsettable at creation. So there was
-// never a code path that could set it, which is why the listing sat on AMO's
-// placeholder while the shipped XPI had every icon it declared.
-//
-// Reapplied unconditionally, like the description: it is one small file that
-// replaces itself in place, so there is no churn to opt out of.
+// documents `icon` as multipart-only and unsettable at creation.
 const uploadIcon = async () => {
   const form = new FormData()
   form.set('icon', imagePart(ICON))
 
-  const addon = await request('PATCH', `/addons/addon/${GUID}/`, { form })
-
-  console.log(`applied listing icon from ${ICON}`)
-  return addon
+  await request('PATCH', addonEndpoint, { form })
+  await awaitPixels(
+    async () => iconUrl(await getAddon()),
+    localPixelKey(ICON),
+    ICON,
+  )
+  record(`applied listing icon from ${ICON}`)
 }
 
-// Previews and the icon are edited on the add-on rather than on a version, so
-// AMO accepts them while a version sits in review — the same path that already
-// lets the release PUT rewrite the description. Every call throws on a non-2xx,
-// so a rejection stops the run instead of half-applying.
-const applyListingAssets = async remotePreviews => {
-  await uploadIcon()
-
-  const manifest = previewManifest()
-
-  if (!syncPreviews) {
-    console.log(describePreviewDrift(remotePreviews, manifest))
-    return
-  }
-
-  const { uploads, deletes } = planPreviewSync(remotePreviews, manifest)
-
-  // Preview writes are throttled per user at 3/minute, 10/hour and 24/day, and
-  // every call below is an unsafe method, so all of them count. Two calls per
-  // image plus the deletes means a three-screenshot sync nearly exhausts an
-  // hour's budget on its own. Crossing the hourly boundary has been seen to
-  // cost a single wait of just under an hour, so saying this up front is the
-  // difference between a slow run and one that looks hung.
-  console.log(
-    `syncing ${uploads.length} previews in ` +
-      `${uploads.length * 2 + deletes.length} throttled calls; AMO allows 10 ` +
-      'an hour, so a single wait can approach that',
+const remotePreviews = addon =>
+  Promise.all(
+    (addon?.previews ?? []).map(async preview => ({
+      id: preview.id,
+      position: preview.position,
+      caption: preview.caption,
+      key: await remotePixelKey(preview.image_url),
+    })),
   )
 
-  for (const upload of uploads) {
+const describeUpdate = ({ id, position, caption }) =>
+  [
+    `preview ${id}:`,
+    position === undefined ? null : `position ${position}`,
+    caption === undefined ? null : 'caption',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+// Previews are edited on the add-on rather than on a version, so AMO accepts
+// them while a version sits in review — the same path that already lets the
+// release PUT rewrite the description.
+const applyPreviews = async plan => {
+  for (const upload of plan.uploads) {
     const form = new FormData()
     form.set('image', imagePart(upload.file))
     form.set('position', String(upload.position))
 
-    const preview = await request('POST', `/addons/addon/${GUID}/previews/`, {
-      form,
-    })
+    const preview = await request('POST', previewsEndpoint, { form })
+    record(`uploaded ${upload.file} as preview ${preview.id}`)
+
+    await awaitPixels(
+      async () =>
+        (await getAddon())?.previews?.find(item => item.id === preview.id)
+          ?.image_url,
+      upload.key,
+      `${upload.file} (preview ${preview.id})`,
+    )
 
     // `caption` is writable on create, but a localized value would have to
     // survive multipart as a bare string and land in whatever AMO treats as the
     // default locale. Sending it as JSON afterwards keeps the `{"en-US": ...}`
-    // shape the rest of the listing is written in.
-    await request('PATCH', `/addons/addon/${GUID}/previews/${preview.id}/`, {
+    // shape the rest of the listing is written in. If the run stops between the
+    // two calls, the next one matches this preview by pixels and patches only
+    // the caption.
+    await request('PATCH', `${previewsEndpoint}${preview.id}/`, {
       json: { caption: upload.caption },
     })
 
-    console.log(`uploaded preview ${upload.position} from ${upload.file}`)
+    record(`captioned preview ${preview.id}`)
   }
 
-  for (const id of deletes) {
-    await request('DELETE', `/addons/addon/${GUID}/previews/${id}/`)
-    console.log(`removed superseded preview ${id}`)
+  for (const { id, ...change } of plan.updates) {
+    await request('PATCH', `${previewsEndpoint}${id}/`, { json: change })
+    record(`updated ${describeUpdate({ id, ...change })}`)
   }
+
+  for (const id of plan.deletes) {
+    await request('DELETE', `${previewsEndpoint}${id}/`)
+    record(`removed preview ${id}`)
+  }
+}
+
+const printPreviewPlan = plan => {
+  const count = countPreviewWrites(plan)
+
+  if (count === 0) {
+    console.log('previews: match the manifest')
+    return
+  }
+
+  console.log(`previews: ${count} writes`)
+
+  for (const upload of plan.uploads) {
+    console.log(`  upload ${upload.file} at position ${upload.position}`)
+  }
+
+  for (const update of plan.updates) {
+    console.log(`  update ${describeUpdate(update)}`)
+  }
+
+  for (const id of plan.deletes) {
+    console.log(`  delete preview ${id}`)
+  }
+}
+
+// Reads what AMO has, then writes the difference. `--plan` stops after the
+// reads. The version comes first because on a first submission the add-on the
+// assets belong to does not exist until the version PUT creates it.
+const reconcile = async () => {
+  if (!assetsOnly) {
+    let current = await getVersion()
+
+    if (current === null) {
+      console.log(`version ${version}: missing`)
+
+      if (planOnly) {
+        console.log('  upload, validate, create version, attach source')
+      } else {
+        requireFiles(packagePath, sourcePath)
+        const upload = await awaitValidation((await uploadPackage()).uuid)
+        current = await submitVersion(upload.uuid)
+      }
+    } else {
+      console.log(
+        `version ${version}: exists (${current.id}, ${current.file?.status})`,
+      )
+    }
+
+    if (current !== null && !current.source) {
+      console.log(`version ${version}: no source`)
+
+      if (planOnly) {
+        console.log('  attach source')
+      } else {
+        requireFiles(sourcePath)
+        current = await attachSource(current.id)
+      }
+    }
+  }
+
+  const manifest = previewManifest()
+  const addon = await getAddon()
+
+  if (addon === null) {
+    console.log('add-on: not on AMO yet; the version PUT creates it')
+    return
+  }
+
+  if (await iconMatches(addon)) {
+    console.log('icon: matches')
+  } else if (planOnly) {
+    console.log(`icon: differs\n  apply ${ICON}`)
+  } else {
+    await uploadIcon()
+  }
+
+  const plan = planPreviewReconcile(await remotePreviews(addon), manifest)
+  printPreviewPlan(plan)
+
+  if (!planOnly) {
+    await applyPreviews(plan)
+  }
+
+  const final = assetsOnly || planOnly ? null : await getVersion()
+
+  console.log(
+    [
+      '',
+      `add-on   ${addon.slug} (${addon.status})`,
+      final ? `version  ${final.version} (${final.file?.status})` : null,
+      `listing  https://addons.mozilla.org/addon/${addon.slug}/`,
+      '',
+      planOnly
+        ? 'Plan only; nothing was written.'
+        : `Done with ${writes} writes.`,
+      final?.file?.status === 'unreviewed'
+        ? 'Listed versions wait for Mozilla review before going live.'
+        : null,
+    ]
+      .filter(line => line !== null)
+      .join('\n'),
+  )
 }
 
 const requireEnv = () => {
@@ -508,16 +727,15 @@ const main = async () => {
     console.log(`\npackage ${path.relative(root, packagePath)}`)
     console.log(`source  ${path.relative(root, sourcePath)}`)
     console.log(`icon    ${ICON}`)
+    localPixelKey(ICON)
 
-    // The manifest is parsed and every image resolved and size-checked here,
-    // which is the point of printing it: a bad path or an oversized screenshot
-    // fails now rather than partway through a real sync. What cannot be shown
-    // is how far the listing has drifted — that needs AMO's side, and a dry run
-    // makes no authenticated calls. The drift line is printed by a real run.
+    // Every image is resolved, size-checked, and decoded here, so a bad path,
+    // an oversized screenshot, or a non-PNG fails now rather than partway
+    // through a release. What AMO already has needs authenticated reads; that
+    // is `--plan`.
     console.log('\n--- previews ---')
 
     for (const preview of previewManifest()) {
-      imagePart(preview.file)
       console.log(`${preview.file}\n  ${preview.caption['en-US']}`)
     }
 
@@ -530,15 +748,6 @@ const main = async () => {
   await verifyCredentials()
   await verifyListing()
 
-  // Applying the assets on their own needs no package and no version, which is
-  // what makes it the way to repair a listing that is already public.
-  if (assetsOnly) {
-    const addon = await request('GET', `/addons/addon/${GUID}/`)
-    await applyListingAssets(addon.previews ?? [])
-    console.log(`\nlisting  https://addons.mozilla.org/addon/${addon.slug}/`)
-    return
-  }
-
   // An upload on its own creates nothing on AMO and does not claim the add-on
   // id — only creating a version does that — so this is a safe way to put a
   // candidate package through the real validator before cutting a release tag.
@@ -549,35 +758,33 @@ const main = async () => {
     return
   }
 
-  requireFiles(packagePath, sourcePath)
+  await reconcile()
+}
 
-  const upload = await awaitValidation((await uploadPackage()).uuid)
-  const addon = await submitVersion(upload.uuid)
-  const version = await attachSource(addon.version.id)
+const defer = error => {
+  const resumeAt = error.resumeAt.toISOString()
 
-  // After `submitVersion`, because on a first-ever submission the add-on record
-  // does not exist until that PUT creates it. Its response already carries the
-  // current previews, so the drift line costs no extra call.
-  await applyListingAssets(addon.previews ?? [])
-
-  // A listed submission is queued for human review; it does not go live the way
-  // a Chrome Web Store publish does. A file status of `unreviewed` and an
-  // add-on status of `nominated` until the first approval are the expected
-  // successful outcomes, so the job must not wait for `public` or it will fail
-  // every release.
-  console.log(
+  console.error(
     [
-      '',
-      `add-on   ${addon.slug} (${addon.status})`,
-      `version  ${version.version} (${version.file.status})`,
-      `listing  https://addons.mozilla.org/addon/${addon.slug}/`,
-      '',
-      'Submitted. Listed versions wait for Mozilla review before going live.',
+      error.message,
+      `Written before the throttle: ${completed.length ? completed.join('; ') : 'nothing'}.`,
+      `The limit clears around ${resumeAt}. Run this again after that; it ` +
+        'continues from what AMO then reports.',
     ].join('\n'),
   )
+
+  if (process.env.GITHUB_OUTPUT) {
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `resume_at=${resumeAt}\n`)
+  }
+
+  process.exit(EXIT_DEFERRED)
 }
 
 main().catch(error => {
+  if (error instanceof Deferred) {
+    defer(error)
+  }
+
   console.error(error.message)
   process.exit(1)
 })
