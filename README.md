@@ -10,6 +10,7 @@ them. Search, messages, and profiles stay reachable.
 [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/hjagmapcdgdffjbbedipfoocmkmhbjeh?logo=googlechrome&logoColor=white&label=Chrome%20Web%20Store&color=ff0050)](https://chromewebstore.google.com/detail/tiktok-feed-blocker/hjagmapcdgdffjbbedipfoocmkmhbjeh)
 [![Firefox Add-ons](https://img.shields.io/amo/v/tiktok-feed-blocker?logo=firefoxbrowser&logoColor=white&label=Firefox%20Add-ons&color=ff0050)](https://addons.mozilla.org/firefox/addon/tiktok-feed-blocker/)
 [![Chrome users](https://img.shields.io/chrome-web-store/users/hjagmapcdgdffjbbedipfoocmkmhbjeh?label=Chrome%20users)](https://chromewebstore.google.com/detail/tiktok-feed-blocker/hjagmapcdgdffjbbedipfoocmkmhbjeh)
+[![Firefox users](https://img.shields.io/amo/users/tiktok-feed-blocker?label=Firefox%20users)](https://addons.mozilla.org/firefox/addon/tiktok-feed-blocker/)
 [![Rating](https://img.shields.io/chrome-web-store/rating/hjagmapcdgdffjbbedipfoocmkmhbjeh?label=Rating)](https://chromewebstore.google.com/detail/tiktok-feed-blocker/hjagmapcdgdffjbbedipfoocmkmhbjeh)
 [![License: MIT](https://img.shields.io/github/license/shbernal/tiktok-feed-blocker)](LICENSE)
 
