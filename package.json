@@ -14,6 +14,9 @@
     "feed-control"
   ],
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "packageManager": "pnpm@11.3.0",
   "scripts": {
     "dev": "vite",
