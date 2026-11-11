@@ -1,0 +1,7 @@
+# Commit messages carry no AI attribution or disclosure; the disclosure goes in the
+# pull request description (pull_request_template.md). The other message rules are off.
+[commit]
+ai_attribution = "forbid"
+conventional_commits = false
+subject_imperative = false
+subject_max_length = 1000
