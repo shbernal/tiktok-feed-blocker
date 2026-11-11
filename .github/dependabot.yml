@@ -9,6 +9,13 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
+      # react and react-dom refuse to run unless their versions match exactly,
+      # so they have to move in the same pull request.
+      react:
+        dependency-type: production
+        patterns:
+          - react
+          - react-dom
       dev-dependencies:
         dependency-type: development
 

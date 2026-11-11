@@ -10,7 +10,7 @@ Store and addons.mozilla.org.
 The `validate` job:
 
 1. Checks out the repository.
-2. Installs pnpm `11.3.0`.
+2. Installs the pnpm version `packageManager` in `package.json` names.
 3. Sets up Node `24` with pnpm caching.
 4. Installs dependencies with `pnpm install --frozen-lockfile`.
 5. Runs `pnpm format`.
@@ -32,13 +32,20 @@ stays readable. It installs Playwright's Chromium and uploads the Playwright
 report as an artifact. `e2e/real/` and `e2e/manual/` stay out of CI because they
 drive real TikTok and need credentials.
 
+The `commit-check` job runs `commit-check/commit-check-action` against the
+rules in `.github/cchk.toml`: commit messages carry no AI attribution. The AI
+disclosure goes in the pull request description, which
+`.github/pull_request_template.md` asks for.
+
 The coverage thresholds sit a couple of points below the measured numbers, so
 an unrelated change cannot quietly lower coverage. Raise them when coverage
 rises; never lower them to make a change pass. The text reporter leaves out
 fully covered files. That is `skipFull`, not a gap in the report.
 
 `.github/dependabot.yml` opens weekly `npm` and `github-actions` update pull
-requests, with development dependencies grouped into one. Store reviewers flag
+requests, with development dependencies grouped into one and `react` with
+`react-dom` into another, since React refuses to run when the two versions
+differ. Store reviewers flag
 stale bundled dependencies, so keep these merged.
 
 `.github/workflows/publish-cws.yml` runs when a GitHub Release is published. It
