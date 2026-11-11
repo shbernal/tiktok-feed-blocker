@@ -14,9 +14,6 @@ const createChromeEvent = <TArgs extends unknown[], TResult = void>() => {
     removeListener: vi.fn((listener: Listener<TArgs, TResult>) => {
       listeners.delete(listener)
     }),
-    hasListener: vi.fn((listener: Listener<TArgs, TResult>) => {
-      return listeners.has(listener)
-    }),
     emit: (...args: TArgs) => {
       return Array.from(listeners, listener => listener(...args))
     },
@@ -25,7 +22,6 @@ const createChromeEvent = <TArgs extends unknown[], TResult = void>() => {
 }
 
 type StorageValues = Record<string, unknown>
-type StorageKeys = string | string[] | StorageValues | null | undefined
 type StorageChange = chrome.storage.StorageChange
 type StorageChanges = Record<string, StorageChange>
 type StorageChangedArgs = [StorageChanges, chrome.storage.AreaName]
@@ -36,29 +32,6 @@ type RuntimeMessageArgs = [
 ]
 type CommandArgs = [command: string]
 
-const pickStorageValues = (values: StorageValues, keys: StorageKeys) => {
-  if (keys === null || keys === undefined) {
-    return { ...values }
-  }
-
-  if (typeof keys === 'string') {
-    return { [keys]: values[keys] }
-  }
-
-  if (Array.isArray(keys)) {
-    return Object.fromEntries(keys.map(key => [key, values[key]]))
-  }
-
-  return Object.fromEntries(
-    Object.entries(keys).map(([key, fallback]) => [
-      key,
-      Object.prototype.hasOwnProperty.call(values, key)
-        ? values[key]
-        : fallback,
-    ]),
-  )
-}
-
 export const createChromeMock = () => {
   const values: StorageValues = {}
   const storageChanged = createChromeEvent<StorageChangedArgs>()
@@ -66,11 +39,9 @@ export const createChromeMock = () => {
   const command = createChromeEvent<CommandArgs, Promise<void> | void>()
 
   const local = {
-    get: vi.fn(
-      (keys: StorageKeys, callback: (items: StorageValues) => void) => {
-        callback(pickStorageValues(values, keys))
-      },
-    ),
+    get: vi.fn((keys: string[], callback: (items: StorageValues) => void) => {
+      callback(Object.fromEntries(keys.map(key => [key, values[key]])))
+    }),
     set: vi.fn((items: StorageValues, callback?: () => void) => {
       const changes = Object.fromEntries(
         Object.entries(items).map(([key, newValue]) => [
@@ -93,7 +64,6 @@ export const createChromeMock = () => {
     seed: (items: StorageValues) => {
       Object.assign(values, items)
     },
-    snapshot: () => ({ ...values }),
   }
 
   return {

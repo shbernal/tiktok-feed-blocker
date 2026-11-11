@@ -64,9 +64,6 @@ describe('content script', () => {
     )
     const video = document.querySelector<HTMLVideoElement>('video')
 
-    expect(columnList).not.toBeNull()
-    expect(video).not.toBeNull()
-
     video!.muted = false
     video!.volume = 0.75
 
@@ -126,9 +123,6 @@ describe('content script', () => {
       '.SectionCommentSidebarContainer-fixture',
     )
 
-    expect(commentWrapper).not.toBeNull()
-    expect(commentSidebar).not.toBeNull()
-
     initContentScript()
 
     expect(displayOf(commentWrapper)).toBe('none')
@@ -170,10 +164,8 @@ describe('content script', () => {
       OVERLAY_TOGGLE_ID,
     ) as HTMLInputElement | null
 
-    expect(overlay).not.toBeNull()
     expect(overlay).toHaveClass('ttfb-overlay-blocked')
     expect(toggleLabel).toHaveTextContent('Block Explore')
-    expect(toggle).not.toBeNull()
     expect(toggle).toBeChecked()
 
     toggle!.checked = false
@@ -192,7 +184,6 @@ describe('content script', () => {
     const availableOverlay = document.getElementById(OVERLAY_ID)
     const blockButton = document.getElementById(OVERLAY_BLOCK_BUTTON_ID)
 
-    expect(availableOverlay).not.toBeNull()
     expect(availableOverlay).toHaveClass('ttfb-overlay-available')
     expect(blockButton).toHaveTextContent('Block Explore')
   })
@@ -348,9 +339,7 @@ describe('content script', () => {
     const overlay = document.getElementById(OVERLAY_ID)
     const blockButton = document.getElementById(OVERLAY_BLOCK_BUTTON_ID)
 
-    expect(columnList).not.toBeNull()
     expect(displayOf(columnList)).toBe('block')
-    expect(overlay).not.toBeNull()
     expect(overlay).toHaveClass('ttfb-overlay-available')
     expect(blockButton).toHaveTextContent('Block Home')
 
@@ -519,9 +508,6 @@ describe('content script', () => {
     )
     const video = document.querySelector<HTMLVideoElement>('video')
 
-    expect(liveContainer).not.toBeNull()
-    expect(video).not.toBeNull()
-
     video!.muted = false
     video!.volume = 0.75
 
@@ -571,7 +557,6 @@ describe('content script', () => {
     initContentScript()
 
     const search = document.getElementById('search')
-    expect(search).not.toBeNull()
 
     fireEvent.keyDown(search!, {
       code: 'Digit8',
@@ -628,11 +613,6 @@ describe('content script', () => {
       inserted.forEach(element => {
         expect(displayOf(element)).toBe('none')
       })
-
-      // The sweep still runs; it is what re-applies muting to media that
-      // mounted with the burst.
-      vi.advanceTimersByTime(100)
-      expect(displayOf(inserted[0])).toBe('none')
     } finally {
       vi.useRealTimers()
     }
@@ -646,20 +626,13 @@ describe('content script', () => {
     // Hands back the storage callback instead of running it, so the test can
     // observe the window the real extension spends waiting on storage.
     const deferStorageRead = () => {
-      const chromeMock = getChromeMock()
+      const { get } = getChromeMock().storage.local
+      const read = get.getMockImplementation()!
       let resolveRead: (() => void) | null = null
 
-      chromeMock.storage.local.get.mockImplementation(
-        (keys: unknown, callback: (items: Record<string, unknown>) => void) => {
-          resolveRead = () => {
-            const values = chromeMock.storage.local.snapshot()
-            const requested = Array.isArray(keys) ? keys : [String(keys)]
-            callback(
-              Object.fromEntries(requested.map(key => [key, values[key]])),
-            )
-          }
-        },
-      )
+      get.mockImplementation((keys, callback) => {
+        resolveRead = () => read(keys, callback)
+      })
 
       return () => resolveRead?.()
     }

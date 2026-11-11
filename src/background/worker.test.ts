@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getChromeMock } from '../test/chrome'
 import { TOGGLE_SHORTCUT_STORAGE_KEY } from '../shared/shortcut'
 
@@ -8,10 +8,6 @@ const loadBackgroundScript = async () => {
 }
 
 describe('background command handling', () => {
-  beforeEach(() => {
-    vi.resetModules()
-  })
-
   it('sends a toggle message to the active TikTok tab', async () => {
     const chromeMock = getChromeMock()
     chromeMock.tabs.query.mockImplementation((_queryInfo, callback) => {
