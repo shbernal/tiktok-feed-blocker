@@ -95,12 +95,10 @@ function App() {
   }
 
   const toggleSection = (section: PageSection) => {
-    persistAndNotify(
-      syncActiveWithPages({
-        ...settings,
-        [section]: !settings[section],
-      }),
-    )
+    persistAndNotify({
+      ...settings,
+      [section]: !settings[section],
+    })
   }
 
   return (

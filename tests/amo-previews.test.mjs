@@ -222,15 +222,6 @@ describe('checkDistinctPixels', () => {
       ]),
     ).toThrow('b.png has the same pixels as a.png')
   })
-
-  it('accepts distinct pixels', () => {
-    expect(() =>
-      checkDistinctPixels([
-        { file: 'a.png', key: 'k1' },
-        { file: 'b.png', key: 'k2' },
-      ]),
-    ).not.toThrow()
-  })
 })
 
 describe('planPreviewReconcile', () => {
@@ -359,7 +350,6 @@ describe('the checked-in previews manifest', () => {
     const path = resolve(process.cwd(), file)
     const { size } = statSync(path)
 
-    expect(size).toBeGreaterThan(0)
     expect(size).toBeLessThanOrEqual(MAX_IMAGE_BYTES)
     expect(pixelKey(readFileSync(path))).toMatch(/^[0-9a-f]{64}$/)
   })

@@ -147,12 +147,11 @@ const isTextInputTarget = (target: EventTarget | null) => {
   )
 }
 
-const isToggleShortcut = (event: KeyboardEvent) => {
-  return matchesShortcut(event, toggleShortcut)
-}
-
 const onKeyDown = (event: KeyboardEvent) => {
-  if (!isToggleShortcut(event) || isTextInputTarget(event.target)) {
+  if (
+    !matchesShortcut(event, toggleShortcut) ||
+    isTextInputTarget(event.target)
+  ) {
     return
   }
 
@@ -369,15 +368,11 @@ export const cleanupContentScript = () => {
   cancelPendingApplySettings()
 }
 
-// Init is body-independent now, so there is nothing left to wait for. Deferring
-// to `DOMContentLoaded` here would put the storage read back behind the parse
-// and hand back the flash this round removed.
-const startContentScript = () => {
-  initContentScript()
-}
-
+// Init is body-independent, so it runs immediately. Deferring to
+// `DOMContentLoaded` here would put the storage read back behind the parse and
+// bring back the flash of the feed.
 if (import.meta.env.MODE !== 'test' && typeof chrome !== 'undefined') {
-  startContentScript()
+  initContentScript()
 }
 
 if (import.meta.hot) {
