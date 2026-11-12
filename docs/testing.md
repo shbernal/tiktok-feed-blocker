@@ -189,7 +189,7 @@ why the guard checks entry names instead of build output.
 - `src/background/worker.test.ts` covers the keyboard command path from command
   event to active-tab message.
 - `src/popup/App.test.tsx` covers loading stored settings, toggling all pages,
-  toggling one section, persistence, and tab notifications.
+  toggling one section, and persistence.
 - `src/content/main.test.ts` covers DOM hiding and restoring, managed media mute
   and restore, blocked and unblocked overlay controls, storage changes, and
   runtime messages.
