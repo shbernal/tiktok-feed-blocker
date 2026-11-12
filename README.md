@@ -72,7 +72,6 @@ access to `tiktok.com`, and the Firefox build declares that it collects no data.
 flowchart LR
   popup["Popup"] -- "saves settings" --> storage[("storage.local")]
   storage -- "onChanged" --> content
-  popup -- "updateSettings" --> content
   keys["Ctrl+Shift+8"] --> worker["Background worker"]
   worker -- "toggleCurrentPageBlock" --> content
   keys -. "keydown on the page" .-> content
