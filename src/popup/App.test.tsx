@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import App from './App'
@@ -117,13 +117,6 @@ describe('popup app', () => {
         overlay: true,
       },
     })
-    chromeMock.tabs.query.mockImplementation((_queryInfo, callback) => {
-      callback([
-        {
-          id: 9,
-        } as chrome.tabs.Tab,
-      ])
-    })
 
     render(<App />)
 
@@ -144,16 +137,6 @@ describe('popup app', () => {
     expect(chromeMock.storage.local.set).toHaveBeenLastCalledWith({
       [SETTINGS_STORAGE_KEY]: nextSettings,
     })
-    await waitFor(() => {
-      expect(chromeMock.tabs.sendMessage).toHaveBeenCalledWith(
-        9,
-        {
-          action: 'updateSettings',
-          settings: nextSettings,
-        },
-        expect.any(Function),
-      )
-    })
   })
 
   it('toggles one section and keeps active true when any page is enabled', async () => {
@@ -167,13 +150,6 @@ describe('popup app', () => {
         live: false,
         overlay: true,
       },
-    })
-    chromeMock.tabs.query.mockImplementation((_queryInfo, callback) => {
-      callback([
-        {
-          id: 12,
-        } as chrome.tabs.Tab,
-      ])
     })
 
     render(<App />)
@@ -194,16 +170,6 @@ describe('popup app', () => {
     expect(homeToggle).toBeChecked()
     expect(chromeMock.storage.local.set).toHaveBeenLastCalledWith({
       [SETTINGS_STORAGE_KEY]: nextSettings,
-    })
-    await waitFor(() => {
-      expect(chromeMock.tabs.sendMessage).toHaveBeenCalledWith(
-        12,
-        {
-          action: 'updateSettings',
-          settings: nextSettings,
-        },
-        expect.any(Function),
-      )
     })
   })
 })

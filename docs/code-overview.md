@@ -101,9 +101,8 @@ compact toggles for every page section plus the overlay visibility preference.
 When the user changes a toggle, the popup:
 
 1. Derives the next `ExtensionSettings`.
-2. Saves them to `chrome.storage.local`.
-3. Queries the active tab.
-4. Sends an `updateSettings` message to the content script when there is a tab.
+2. Saves them to `chrome.storage.local`, which every TikTok tab's content script
+   observes through `storage.onChanged`.
 
 The popup is designed around a 320px width, so keep it compact.
 

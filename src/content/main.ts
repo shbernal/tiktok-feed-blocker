@@ -21,11 +21,6 @@ import {
 } from './overlay'
 import { getCurrentPageSection } from './selectors'
 
-type UpdateSettingsMessage = {
-  action: 'updateSettings'
-  settings: ExtensionSettings
-}
-
 type ToggleCurrentPageBlockMessage = {
   action: 'toggleCurrentPageBlock'
 }
@@ -55,18 +50,6 @@ let lastShortcutToggleAt = 0
 // Mirrored from `chrome.commands` by the background script; until it lands the
 // manifest default keeps the fallback working.
 let toggleShortcut: ParsedShortcut | null = resolveToggleShortcut(undefined)
-
-const isUpdateSettingsMessage = (
-  message: unknown,
-): message is UpdateSettingsMessage => {
-  return (
-    typeof message === 'object' &&
-    message !== null &&
-    'action' in message &&
-    'settings' in message &&
-    (message as { action: unknown }).action === 'updateSettings'
-  )
-}
 
 const isToggleCurrentPageBlockMessage = (
   message: unknown,
@@ -164,14 +147,6 @@ const onKeyDown = (event: KeyboardEvent) => {
 const onRuntimeMessage: Parameters<
   typeof chrome.runtime.onMessage.addListener
 >[0] = (message, _sender, sendResponse) => {
-  if (isUpdateSettingsMessage(message)) {
-    settings = normalizeSettings(message.settings, settings)
-    applySettings()
-
-    sendResponse({ success: true })
-    return false
-  }
-
   if (isToggleCurrentPageBlockMessage(message)) {
     if (wasRecentlyToggledByShortcut()) {
       sendResponse({ success: true })

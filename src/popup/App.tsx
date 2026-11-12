@@ -5,17 +5,13 @@ import {
   deriveSettingsFromStorage,
   isAllPagesActive,
   LEGACY_ACTIVE_STORAGE_KEY,
+  normalizeSettings,
   type PageSection,
   setAllPages,
   syncActiveWithPages,
   type ExtensionSettings,
   SETTINGS_STORAGE_KEY,
 } from '../shared/settings'
-
-type UpdateSettingsMessage = {
-  action: 'updateSettings'
-  settings: ExtensionSettings
-}
 
 function App() {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS)
@@ -40,10 +36,12 @@ function App() {
         return
       }
 
+      // Normalized against the current settings, as the content script does:
+      // the legacy key is migrated once on open, never on a later change.
       setSettings(currentSettings =>
-        deriveSettingsFromStorage(
+        normalizeSettings(
           changes[SETTINGS_STORAGE_KEY].newValue,
-          currentSettings.active,
+          currentSettings,
         ),
       )
     }
@@ -55,47 +53,25 @@ function App() {
     }
   }, [])
 
-  const persistAndNotify = (nextSettings: ExtensionSettings) => {
+  // The content script applies the change from `storage.onChanged`.
+  const persist = (nextSettings: ExtensionSettings) => {
     const syncedSettings = syncActiveWithPages(nextSettings)
 
     setSettings(syncedSettings)
     chrome.storage.local.set({ [SETTINGS_STORAGE_KEY]: syncedSettings })
-
-    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-      if (chrome.runtime.lastError) {
-        console.debug(
-          'Could not find the active tab:',
-          chrome.runtime.lastError.message,
-        )
-        return
-      }
-
-      if (tab?.id === undefined) {
-        return
-      }
-
-      const message: UpdateSettingsMessage = {
-        action: 'updateSettings',
-        settings: syncedSettings,
-      }
-      chrome.tabs.sendMessage(tab.id, message, () => {
-        // Ignore expected errors (e.g., active tab has no injected content script).
-        void chrome.runtime.lastError
-      })
-    })
   }
 
   const toggleAllPages = () => {
-    persistAndNotify(setAllPages(settings, !isAllPagesActive(settings)))
+    persist(setAllPages(settings, !isAllPagesActive(settings)))
   }
 
   // Not a page section: it must not move with "Block all pages".
   const toggleOverlay = () => {
-    persistAndNotify({ ...settings, overlay: !settings.overlay })
+    persist({ ...settings, overlay: !settings.overlay })
   }
 
   const toggleSection = (section: PageSection) => {
-    persistAndNotify({
+    persist({
       ...settings,
       [section]: !settings[section],
     })
